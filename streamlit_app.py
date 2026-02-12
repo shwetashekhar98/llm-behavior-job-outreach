@@ -549,8 +549,8 @@ elif st.session_state.stage == "results":
                 
                 # Run details
                 for run in result["runs"]:
-                    status_color = "#22c55e" if run["overall_pass"] else "#ef4444"
-                    status_text = "✅ PASS" if run["overall_pass"] else "❌ FAIL"
+                    status_color = "#22c55e" if run.get("overall_pass", False) else "#ef4444"
+                    status_text = "✅ PASS" if run.get("overall_pass", False) else "❌ FAIL"
                     
                     word_count = run.get("word_count", len(run.get("message", "").split()))
                     st.markdown(f"""
@@ -585,8 +585,8 @@ elif st.session_state.stage == "results":
                     with col5:
                         render_check_indicator(not checks.get("unsupported_claims_detected", False), "No Unsupported")
                     
-                    if run["failure_reasons"]:
-                        st.warning(f"**Why it failed:** {'; '.join(run['failure_reasons'])}")
+                    if run.get("failure_reasons"):
+                        st.warning(f"**Why it failed:** {'; '.join(run.get('failure_reasons', []))}")
                         
                         # Fix suggestions
                         suggestions = generate_fix_suggestions(run, result["scenario"])
@@ -597,9 +597,9 @@ elif st.session_state.stage == "results":
                     
                     st.text_area(
                         "Generated Message",
-                        run["message"],
+                        run.get("message", ""),
                         height=120,
-                        key=f"{result['scenario_id']}_run{run['run']}",
+                        key=f"{result['scenario_id']}_run{run.get('run', 0)}",
                         label_visibility="visible"
                     )
                     
@@ -613,21 +613,32 @@ elif st.session_state.stage == "results":
         csv_rows = []
         for result in results:
             for run in result["runs"]:
-                    csv_rows.append({
+                # Access checks object if available
+                checks = run.get("checks", {})
+                if not checks:
+                    checks = {
+                        "within_word_limit": run.get("within_word_limit", False),
+                        "must_include_ok": run.get("must_include_ok", False),
+                        "tone_ok": run.get("tone_ok", False),
+                        "fabrication_detected": run.get("fabrication_detected", False),
+                        "unsupported_claims_detected": run.get("unsupported_claims_detected", False)
+                    }
+                
+                csv_rows.append({
                     "scenario_id": result["scenario_id"],
                     "company": result["scenario"]["company"],
                     "target_role": result["scenario"]["target_role"],
                     "channel": result["scenario"]["channel"],
-                    "run": run["run"],
+                    "run": run.get("run", 0),
                     "word_count": run.get("word_count", len(run.get("message", "").split())),
-                    "confidence": run["confidence"],
-                    "overall_pass": run["overall_pass"],
-                    "word_limit": run["within_word_limit"],
-                    "must_include": run["must_include_ok"],
-                    "tone_ok": run["tone_ok"],
-                    "fabrication": run["fabrication_detected"],
-                    "unsupported_claims": run.get("unsupported_claims_detected", False),
-                    "message": run["message"],
+                    "confidence": run.get("confidence", 0.0),
+                    "overall_pass": run.get("overall_pass", False),
+                    "word_limit": checks.get("within_word_limit", False),
+                    "must_include": checks.get("must_include_ok", False),
+                    "tone_ok": checks.get("tone_ok", False),
+                    "fabrication": checks.get("fabrication_detected", False),
+                    "unsupported_claims": checks.get("unsupported_claims_detected", False),
+                    "message": run.get("message", ""),
                     "failure_reasons": "; ".join(run.get("failure_reasons", []))
                 })
         
