@@ -514,9 +514,10 @@ elif st.session_state.stage == "results":
                     status_color = "#22c55e" if run["overall_pass"] else "#ef4444"
                     status_text = "✅ PASS" if run["overall_pass"] else "❌ FAIL"
                     
+                    word_count = run.get("word_count", len(run.get("message", "").split()))
                     st.markdown(f"""
                     <div style="background: #1e293b; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid {status_color};">
-                        <h4 style="color: {status_color}; margin: 0;">Run {run['run']} - {status_text} | Confidence: {run['confidence']:.2f}</h4>
+                        <h4 style="color: {status_color}; margin: 0;">Run {run['run']} - {status_text} | Confidence: {run['confidence']:.2f} | Words: {word_count}</h4>
                     </div>
                     """, unsafe_allow_html=True)
                     
@@ -556,12 +557,13 @@ elif st.session_state.stage == "results":
         csv_rows = []
         for result in results:
             for run in result["runs"]:
-                csv_rows.append({
+                    csv_rows.append({
                     "scenario_id": result["scenario_id"],
                     "company": result["scenario"]["company"],
                     "target_role": result["scenario"]["target_role"],
                     "channel": result["scenario"]["channel"],
                     "run": run["run"],
+                    "word_count": run.get("word_count", len(run.get("message", "").split())),
                     "confidence": run["confidence"],
                     "overall_pass": run["overall_pass"],
                     "word_limit": run["within_word_limit"],
