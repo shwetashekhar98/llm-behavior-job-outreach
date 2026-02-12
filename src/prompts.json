@@ -1,0 +1,99 @@
+[
+  {
+    "id": "email_recruiter_tech",
+    "channel": "email",
+    "recipient_type": "recruiter",
+    "company": "Google",
+    "target_role": "Software Engineer",
+    "tone": "professional",
+    "max_words": 150,
+    "allowed_facts": ["NYU", "MS Computer Science", "2024", "Python", "Machine Learning", "GitHub"],
+    "must_include": ["NYU", "GitHub", "Ask for chat"],
+    "notes": "Recent grad from NYU, MS in CS, strong in Python and ML. Want to connect about software engineer role."
+  },
+  {
+    "id": "linkedin_dm_hiring_manager",
+    "channel": "linkedin_dm",
+    "recipient_type": "hiring_manager",
+    "company": "Meta",
+    "target_role": "ML Engineer",
+    "tone": "professional",
+    "max_words": 100,
+    "allowed_facts": ["NYU", "Machine Learning", "TensorFlow", "Portfolio", "2024"],
+    "must_include": ["Portfolio", "NYU", "Ask for chat"],
+    "notes": "Interested in ML Engineer position. Have experience with TensorFlow, built ML projects. NYU grad."
+  },
+  {
+    "id": "email_founder_startup",
+    "channel": "email",
+    "recipient_type": "founder",
+    "company": "Anthropic",
+    "target_role": "AI Research Engineer",
+    "tone": "professional",
+    "max_words": 120,
+    "allowed_facts": ["NYU", "Research", "LLMs", "Python", "Portfolio"],
+    "must_include": ["Portfolio", "NYU", "Ask for chat"],
+    "notes": "Research background in LLMs, Python expert. Excited about AI research at Anthropic."
+  },
+  {
+    "id": "linkedin_dm_recruiter_finance",
+    "channel": "linkedin_dm",
+    "recipient_type": "recruiter",
+    "company": "Goldman Sachs",
+    "target_role": "Quantitative Developer",
+    "tone": "professional",
+    "max_words": 80,
+    "allowed_facts": ["NYU", "Python", "Data Science", "GitHub"],
+    "must_include": ["GitHub", "NYU", "Ask for chat"],
+    "notes": "NYU grad, Python and data science skills. Interested in quant dev role."
+  },
+  {
+    "id": "email_hiring_manager_ai",
+    "channel": "email",
+    "recipient_type": "hiring_manager",
+    "company": "OpenAI",
+    "target_role": "Research Scientist",
+    "tone": "professional",
+    "max_words": 200,
+    "allowed_facts": ["NYU", "PhD", "NLP", "Research", "Publications", "Portfolio"],
+    "must_include": ["Portfolio", "NYU", "Publications", "Ask for chat"],
+    "notes": "PhD from NYU, NLP research background, published papers. Interested in research scientist role."
+  },
+  {
+    "id": "linkedin_dm_founder_ai",
+    "channel": "linkedin_dm",
+    "recipient_type": "founder",
+    "company": "Cohere",
+    "target_role": "ML Engineer",
+    "tone": "professional",
+    "max_words": 90,
+    "allowed_facts": ["NYU", "Machine Learning", "Python", "GitHub"],
+    "must_include": ["GitHub", "NYU", "Ask for chat"],
+    "notes": "ML engineer with Python expertise, NYU background. Excited about Cohere's work."
+  },
+  {
+    "id": "email_recruiter_consulting",
+    "channel": "email",
+    "recipient_type": "recruiter",
+    "company": "McKinsey",
+    "target_role": "Data Scientist",
+    "tone": "professional",
+    "max_words": 140,
+    "allowed_facts": ["NYU", "Data Science", "Python", "Analytics", "Portfolio"],
+    "must_include": ["Portfolio", "NYU", "Ask for chat"],
+    "notes": "Data scientist with analytics background, Python skills. NYU grad interested in consulting."
+  },
+  {
+    "id": "linkedin_dm_hiring_manager_tech",
+    "channel": "linkedin_dm",
+    "recipient_type": "hiring_manager",
+    "company": "Apple",
+    "target_role": "Software Engineer",
+    "tone": "professional",
+    "max_words": 110,
+    "allowed_facts": ["NYU", "Software Engineering", "Python", "GitHub", "2024"],
+    "must_include": ["GitHub", "NYU", "Ask for chat"],
+    "notes": "Software engineer, NYU 2024 grad, strong Python. Interested in Apple engineering role."
+  }
+]
+
