@@ -1,9 +1,11 @@
 """
-Evaluation runner for generating and evaluating job outreach messages.
+Evaluation runner implementing PHASE 3 and PHASE 4.
+PHASE 3: Message Generation with word count enforcement
+PHASE 4: Evaluation
 """
 
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List
 from groq import Groq
 from validation_engine import run_all_checks
 
@@ -20,25 +22,35 @@ def extract_confidence(text: str) -> float:
     return 0.5
 
 
-def generate_message(
+def count_words(text: str) -> int:
+    """Count words in text."""
+    if not text:
+        return 0
+    return len(text.split())
+
+
+def generate_message_with_word_limit(
     client: Groq,
     scenario: Dict,
     allowed_facts: List[str],
     model: str,
-    run_idx: int
+    run_idx: int,
+    max_attempts: int = 3
 ) -> Dict:
     """
-    Generate a single job outreach message.
+    PHASE 3: Generate message with strict word limit enforcement.
     
-    Args:
-        client: Groq client
-        scenario: Scenario dictionary with channel, company, role, etc.
-        allowed_facts: List of approved facts from profile
-        model: Model name
-        run_idx: Run number (0-indexed)
-        
+    Rules:
+    - Do NOT introduce new facts
+    - Do NOT exaggerate
+    - Do NOT invent metrics
+    - Respect max_words strictly
+    - If message exceeds word limit, rewrite until within limit
+    - Tone must be professional
+    - Must include required items
+    
     Returns:
-        Dictionary with generated message and metadata
+        Dictionary with message, word_count, and confidence_score
     """
     channel = scenario.get("channel", "email")
     company = scenario.get("company", "")
@@ -49,26 +61,39 @@ def generate_message(
     must_include = scenario.get("must_include", [])
     notes = scenario.get("notes", "")
     
-    system_prompt = f"""You are generating a job outreach message.
+    system_prompt = f"""You are a reliability-focused message generation system.
 
-STRICT RULES:
-- You may ONLY use facts from the provided allowed_facts list.
-- Do NOT invent degrees, graduation years, companies, publications, or metrics.
-- Do NOT assume graduation if not explicitly stated.
-- Stay under {max_words} words.
-- Maintain professional tone.
-- Must include: {', '.join(must_include) if must_include else 'None specified'}
+PHASE 3: MESSAGE GENERATION
+
+Generate a professional outreach message based ONLY on APPROVED_FACTS.
+
+STRICT CONSTRAINTS:
+- Do NOT introduce new facts
+- Do NOT exaggerate
+- Do NOT invent metrics
+- Respect max_words strictly ({max_words} words maximum)
+- If message exceeds word limit, rewrite until within limit
+- Tone must be professional
+- Must include required items: {', '.join(must_include) if must_include else 'None specified'}
 
 Target: {recipient_type} at {company} for {target_role} role
 Channel: {channel}
 Tone: {tone}
-Maximum words: {max_words}
+Maximum words: {max_words} (STRICT - count words and stay under)
 Allowed facts ONLY: {', '.join(allowed_facts) if allowed_facts else 'None provided'}
 
 For email: Include a subject line. For LinkedIn DM: No subject line.
 
-Append exactly at the end:
-Confidence: <number between 0 and 1>"""
+Before returning:
+- Count words
+- If over limit → rewrite shorter version
+- Ensure all required items are included
+
+Return message AND at the end:
+Word Count: <number>
+Confidence: <number between 0 and 1>
+
+Reliability > Impressiveness. Never fabricate."""
 
     user_prompt = f"""Generate a {channel} message:
 
@@ -79,36 +104,68 @@ Role: {target_role}
 Recipient: {recipient_type}
 
 Requirements:
-- {tone} tone, max {max_words} words
+- {tone} tone, max {max_words} words (STRICT LIMIT)
 - Must include: {', '.join(must_include) if must_include else 'None'}
-- Only use these facts: {', '.join(allowed_facts) if allowed_facts else 'None provided'}"""
+- Only use these facts: {', '.join(allowed_facts) if allowed_facts else 'None provided'}
 
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.2,
-            max_tokens=800
-        )
+Generate a concise, professional message within the word limit."""
+
+    for attempt in range(max_attempts):
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.2,
+                max_tokens=800
+            )
+            
+            message = response.choices[0].message.content or ""
+            
+            # Extract word count and confidence from message
+            word_count_match = re.search(r'Word Count:\s*(\d+)', message, re.IGNORECASE)
+            if word_count_match:
+                reported_word_count = int(word_count_match.group(1))
+            else:
+                reported_word_count = count_words(message)
+            
+            # Remove metadata from message
+            message_clean = re.sub(r'Word Count:.*', '', message, flags=re.IGNORECASE)
+            message_clean = re.sub(r'Confidence:.*', '', message_clean, flags=re.IGNORECASE)
+            message_clean = message_clean.strip()
+            
+            actual_word_count = count_words(message_clean)
+            confidence = extract_confidence(message)
+            
+            # If over limit and not last attempt, try again with stricter prompt
+            if actual_word_count > max_words and attempt < max_attempts - 1:
+                system_prompt += f"\n\nIMPORTANT: Previous attempt had {actual_word_count} words. You MUST generate a message with {max_words} words or fewer. Be more concise."
+                continue
+            
+            return {
+                "message": message_clean,
+                "word_count": actual_word_count,
+                "confidence_score": confidence,
+                "error": None
+            }
         
-        message = response.choices[0].message.content or ""
-        confidence = extract_confidence(message)
-        
-        return {
-            "message": message,
-            "confidence": confidence,
-            "error": None
-        }
+        except Exception as e:
+            if attempt == max_attempts - 1:
+                return {
+                    "message": "",
+                    "word_count": 0,
+                    "confidence_score": 0.0,
+                    "error": str(e)
+                }
     
-    except Exception as e:
-        return {
-            "message": "",
-            "confidence": 0.0,
-            "error": str(e)
-        }
+    return {
+        "message": "",
+        "word_count": 0,
+        "confidence_score": 0.0,
+        "error": "Failed to generate within word limit"
+    }
 
 
 def evaluate_scenario(
@@ -120,7 +177,7 @@ def evaluate_scenario(
     strict_mode: bool = False
 ) -> Dict:
     """
-    Evaluate a single scenario by generating multiple messages and checking them.
+    Evaluate a single scenario: PHASE 3 (generation) + PHASE 4 (evaluation).
     
     Returns:
         Dictionary with evaluation results
@@ -129,8 +186,10 @@ def evaluate_scenario(
     results = []
     
     for run_idx in range(runs):
-        # Generate message
-        gen_result = generate_message(client, scenario, allowed_facts, model, run_idx)
+        # PHASE 3: Generate message
+        gen_result = generate_message_with_word_limit(
+            client, scenario, allowed_facts, model, run_idx
+        )
         
         if gen_result["error"]:
             # Error case
@@ -145,7 +204,7 @@ def evaluate_scenario(
                 "notes": f"Error: {gen_result['error']}"
             }
         else:
-            # Run validation checks
+            # PHASE 4: Evaluation
             check_result = run_all_checks(
                 gen_result["message"],
                 scenario.get("max_words", 150),
@@ -159,7 +218,8 @@ def evaluate_scenario(
         results.append({
             "run": run_idx + 1,
             "message": gen_result["message"],
-            "confidence": gen_result["confidence"],
+            "confidence": gen_result["confidence_score"],
+            "word_count": gen_result["word_count"],
             **check_result
         })
     
@@ -194,9 +254,6 @@ def evaluate_scenario(
 def compute_overall_metrics(evaluation_results: List[Dict]) -> Dict:
     """
     Compute overall metrics across all scenarios.
-    
-    Returns:
-        Dictionary with overall metrics
     """
     if not evaluation_results:
         return {
@@ -220,4 +277,3 @@ def compute_overall_metrics(evaluation_results: List[Dict]) -> Dict:
         "overconfidence_rate": overall_overconfidence_rate,
         "stability_rate": stability_rate
     }
-

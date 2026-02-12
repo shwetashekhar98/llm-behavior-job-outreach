@@ -1,6 +1,7 @@
 """
-Strict evidence-based profile extraction from unstructured text.
-Only extracts complete, professional facts with high confidence.
+Reliability-focused profile extraction with 4-phase system.
+PHASE 1: Profile Sanitization
+PHASE 2: Fact Approval
 """
 
 import re
@@ -9,9 +10,10 @@ from typing import List, Dict, Set
 from groq import Groq
 
 
-def clean_profile_text(text: str) -> str:
+def sanitize_profile_text(text: str) -> str:
     """
-    Clean profile text by removing UI artifacts, duplicates, and noise.
+    PHASE 1: Profile Sanitization
+    Remove truncated phrases, UI text, duplicates, and non-professional content.
     
     Returns:
         Cleaned text ready for extraction
@@ -19,47 +21,57 @@ def clean_profile_text(text: str) -> str:
     if not text:
         return ""
     
-    # Remove common UI artifacts
-    ui_patterns = [
-        r'see more',
-        r'show all \d+',
-        r'view all',
-        r'expand',
-        r'collapse',
-        r'\d+ (likes?|comments?|shares?|impressions?)',
-        r'\d+ followers?',
-        r'\d+ connections?',
-        r'• • •',
-        r'\.\.\.',
-        r'\[.*?\]',  # Remove brackets content
-        r'\(.*?\)',  # Remove parentheses (but keep if meaningful)
-    ]
-    
-    cleaned = text
-    for pattern in ui_patterns:
-        cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
-    
-    # Remove timestamps (various formats)
-    timestamp_patterns = [
-        r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}',
-        r'\d{4}[/-]\d{1,2}[/-]\d{1,2}',
-        r'(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{1,2},?\s+\d{4}',
-        r'\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec),?\s+\d{4}',
-    ]
-    
-    for pattern in timestamp_patterns:
-        cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
-    
-    # Remove duplicate lines (keep only first occurrence)
-    lines = cleaned.split('\n')
+    lines = text.split('\n')
+    cleaned_lines = []
     seen = set()
-    unique_lines = []
+    
     for line in lines:
-        line_stripped = line.strip().lower()
-        if line_stripped and line_stripped not in seen:
-            seen.add(line_stripped)
-            unique_lines.append(line)
-    cleaned = '\n'.join(unique_lines)
+        line = line.strip()
+        if not line:
+            continue
+        
+        # Remove lines shorter than 5 words
+        words = line.split()
+        if len(words) < 5:
+            continue
+        
+        # Remove lines starting with lowercase fragments
+        if re.match(r'^\s*[a-z]+\s+(that|across|and|or|the|a|an)\s+', line, re.IGNORECASE):
+            continue
+        
+        # Remove navigation/UI text
+        ui_patterns = [
+            r'see more',
+            r'show all',
+            r'view all',
+            r'expand',
+            r'collapse',
+            r'click',
+            r'\d+ (likes?|comments?|shares?|impressions?|followers?|connections?)',
+            r'• • •',
+            r'\.\.\.',
+        ]
+        
+        if any(re.search(pattern, line, re.IGNORECASE) for pattern in ui_patterns):
+            continue
+        
+        # Remove truncated phrases (ends with incomplete word)
+        if re.search(r'\s+[a-z]{1,2}\s*$', line):
+            continue
+        
+        # Remove duplicates (case-insensitive)
+        line_lower = line.lower()
+        if line_lower in seen:
+            continue
+        seen.add(line_lower)
+        
+        # Remove timestamps
+        if re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', line):
+            continue
+        
+        cleaned_lines.append(line)
+    
+    cleaned = '\n'.join(cleaned_lines)
     
     # Remove excessive whitespace
     cleaned = re.sub(r'\s+', ' ', cleaned)
@@ -68,160 +80,77 @@ def clean_profile_text(text: str) -> str:
     return cleaned.strip()
 
 
-def is_valid_fact(fact: str) -> bool:
-    """
-    Validate if a fact is acceptable.
-    Rejects fragments, broken text, UI noise, and incomplete phrases.
-    
-    Returns:
-        True if fact is valid, False otherwise
-    """
-    if not fact or len(fact.strip()) < 5:
-        return False
-    
-    fact_lower = fact.lower()
-    
-    # Reject if too short (less than 5 meaningful words)
-    words = fact.split()
-    if len(words) < 5:
-        return False
-    
-    # Reject broken fragments
-    broken_patterns = [
-        r'^\w+\s+that\s+are\s+\w+$',  # "ms that are observable"
-        r'^\w+\s+across\s+\w+$',  # "ms across public"
-        r'^\w+\s+and\s+\w+$',  # Single word fragments
-    ]
-    
-    for pattern in broken_patterns:
-        if re.match(pattern, fact_lower):
-            return False
-    
-    # Reject if contains UI noise
-    ui_noise = ['see more', 'show all', 'expand', 'click', 'view', 'followers', 'connections']
-    if any(noise in fact_lower for noise in ui_noise):
-        return False
-    
-    # Reject if looks like substring (starts/ends with incomplete word)
-    if re.match(r'^\w+\s+\w+\s+\w+$', fact) and len(fact) < 30:
-        # Very short 3-word phrases are likely fragments
-        return False
-    
-    # Reject if contains broken words (multiple single letters)
-    if len(re.findall(r'\b\w\b', fact)) > 3:
-        return False
-    
-    # Must contain at least one complete sentence or meaningful phrase
-    if not re.search(r'[.!?]|(?:worked|studied|led|built|developed|created|designed|implemented)', fact_lower):
-        # Check if it's a meaningful phrase
-        meaningful_indicators = [
-            r'\d+',  # Contains numbers
-            r'(?:years?|months?|experience|degree|university|college|company|engineer|developer|scientist)',
-        ]
-        if not any(re.search(pattern, fact_lower) for pattern in meaningful_indicators):
-            return False
-    
-    return True
-
-
-def extract_evidence_based_facts(
+def extract_structured_profile_data(
     text: str,
     api_key: str,
     model: str = "llama-3.1-8b-instant"
-) -> List[Dict]:
+) -> Dict:
     """
-    Extract structured professional facts from unstructured profile text.
-    Strict evidence-based extraction with validation.
+    PHASE 1: Extract structured profile data from sanitized text.
     
     Returns:
-        List of fact dictionaries with category, fact, confidence, and source
+        Structured JSON with education, experience, skills, achievements, research, links
     """
-    if not text or not text.strip():
-        return []
-    
-    # Step 1: Clean the text
-    cleaned_text = clean_profile_text(text)
-    
-    if not cleaned_text or len(cleaned_text.strip()) < 20:
-        return []
+    if not text or len(text.strip()) < 20:
+        return {
+            "education": [],
+            "experience": [],
+            "skills": [],
+            "achievements": [],
+            "research": [],
+            "links": []
+        }
     
     client = Groq(api_key=api_key)
     
-    system_prompt = """You are a strict evidence-based information extraction system.
+    system_prompt = """You are a reliability-focused profile extraction system.
 
-Your task: Extract structured professional facts from UNSTRUCTURED profile text.
+PHASE 1: PROFILE SANITIZATION
 
-CRITICAL RULES:
-1. ONLY extract facts that are:
-   - Complete sentences or clearly structured phrases
-   - Professionally relevant (education, experience, skills, impact, publications, roles)
-   - Explicitly stated in the text
+Extract ONLY verifiable, complete facts from profile text.
 
-2. DO NOT:
-   - Extract broken fragments (e.g., "ms that are observable")
-   - Extract partial substrings
-   - Infer missing words
-   - Guess abbreviations
-   - Expand unclear acronyms
-   - Combine unrelated fragments
+Rules:
+1. Remove:
+   - Truncated phrases
+   - Lines starting with lowercase fragments like "ms", "bs", "degree connection"
+   - Navigation/UI text
+   - Duplicates
+   - Lines shorter than 5 words
+   - Text that is not about the candidate
 
-3. If a phrase looks incomplete, corrupted, or truncated → IGNORE IT.
+2. Only extract:
+   - Complete, meaningful professional facts
+   - Education (degree, university, graduation year)
+   - Roles with measurable impact
+   - Skills clearly stated
+   - Research or publications
+   - Quantified achievements
+   - Certifications
 
-4. If confidence < 80% → DO NOT extract it.
-
-5. NEVER fabricate.
-6. NEVER rewrite the fact.
-7. Extract verbatim clean professional facts only.
-
-Extract facts into these categories:
-- Education
-- Work Experience
-- Technical Skills
-- AI/ML Experience
-- Research & Publications
-- Impact Metrics (with numbers only if explicitly stated)
-- Certifications
-- Leadership / Awards
-
-Each extracted fact must:
-- Be standalone and readable
-- Be professionally meaningful
-- Be grounded in text
-- Include confidence score (0.0–1.0)
-- Include source snippet (exact quote from text)
-
-Reject any fact that:
-- Is shorter than 5 meaningful words
-- Contains broken words
-- Contains UI noise
-- Looks like substring extraction
-- Is repeated
-
-OUTPUT FORMAT (STRICT JSON):
+3. Convert everything into structured JSON:
 {
-  "approved_facts": [
-    {
-      "category": "Work Experience",
-      "fact": "Led backend and API initiatives on Azure, improving query performance by 20–30% and reducing release cycles by 25%.",
-      "confidence": 0.95,
-      "source": "Led backend and API initiatives on Azure..."
-    }
-  ],
-  "rejected_fragments": [
-    "ms that are observable",
-    "ms across public and private sectors"
-  ]
+  "education": [],
+  "experience": [],
+  "skills": [],
+  "achievements": [],
+  "research": [],
+  "links": []
 }
 
-If no clean facts found, return empty array.
-Do not include commentary. Do not explain. Return JSON only."""
+Do NOT invent missing data.
+If something is unclear, omit it.
+Never fabricate.
+Never guess missing graduation years.
+Never assume company names.
+Never complete truncated fragments.
 
-    user_prompt = f"""Extract professional facts from this profile text.
+Return JSON only. No commentary."""
 
-Text:
-{cleaned_text}
+    user_prompt = f"""Extract structured profile data from this text:
 
-Return JSON with approved_facts and rejected_fragments."""
+{text}
+
+Return JSON with education, experience, skills, achievements, research, and links arrays."""
 
     try:
         response = client.chat.completions.create(
@@ -237,134 +166,212 @@ Return JSON with approved_facts and rejected_fragments."""
         result_text = response.choices[0].message.content or "{}"
         result_json = json.loads(result_text)
         
-        # Extract approved facts
-        approved_facts_raw = result_json.get("approved_facts", [])
+        # Validate structure
+        structured = {
+            "education": result_json.get("education", []),
+            "experience": result_json.get("experience", []),
+            "skills": result_json.get("skills", []),
+            "achievements": result_json.get("achievements", []),
+            "research": result_json.get("research", []),
+            "links": result_json.get("links", [])
+        }
         
-        # Validate and format facts
-        validated_facts = []
-        seen_facts = set()
+        # Filter out empty strings and validate
+        for key in structured:
+            structured[key] = [
+                item for item in structured[key]
+                if item and isinstance(item, str) and len(item.strip()) >= 5
+            ]
         
-        for fact_data in approved_facts_raw:
-            fact_text = fact_data.get("fact", "").strip()
-            confidence = fact_data.get("confidence", 0.0)
-            source = fact_data.get("source", fact_text).strip()
-            category = fact_data.get("category", "Other")
-            
-            # Skip if confidence too low
-            if confidence < 0.8:
-                continue
-            
-            # Skip if already seen (duplicate)
-            fact_lower = fact_text.lower()
-            if fact_lower in seen_facts:
-                continue
-            
-            # Validate fact
-            if not is_valid_fact(fact_text):
-                continue
-            
-            # Verify source exists in original text (case-insensitive)
-            if source.lower() not in cleaned_text.lower():
-                # Try to find similar text
-                words = source.split()[:5]  # First 5 words
-                search_text = ' '.join(words)
-                if search_text.lower() not in cleaned_text.lower():
-                    continue  # Skip if source not found
-            
-            # Find actual source indices
-            source_lower = source.lower()
-            text_lower = cleaned_text.lower()
-            start_idx = text_lower.find(source_lower)
-            
-            if start_idx == -1:
-                # Try with fact text instead
-                start_idx = text_lower.find(fact_lower[:50])
-                if start_idx != -1:
-                    source = cleaned_text[start_idx:start_idx + len(fact_text)]
-            
-            if start_idx == -1:
-                start_idx = 0
-                end_idx = len(fact_text)
-            else:
-                end_idx = start_idx + len(source)
-            
-            validated_facts.append({
-                "value": fact_text,
-                "source_quote": source,
-                "start_index": start_idx,
-                "end_index": end_idx,
-                "confidence": confidence,
-                "category": category
-            })
-            
-            seen_facts.add(fact_lower)
-        
-        return validated_facts
+        return structured
     
     except Exception as e:
-        # Fallback: simple extraction without LLM
-        return extract_simple_facts(cleaned_text)
+        # Fallback: return empty structure
+        return {
+            "education": [],
+            "experience": [],
+            "skills": [],
+            "achievements": [],
+            "research": [],
+            "links": []
+        }
 
 
-def extract_simple_facts(text: str) -> List[Dict]:
+def create_approved_facts(structured_data: Dict) -> List[str]:
     """
-    Simple rule-based extraction as fallback.
-    Only extracts obvious patterns with direct quotes.
+    PHASE 2: Fact Approval
+    From structured data, produce a clean list of approved facts.
+    
+    Rules:
+    - Each fact must be complete and grammatically correct
+    - No fragments
+    - No partial lines
+    - No UI content
+    - No hallucination
+    - No assumptions
     """
-    facts = []
-    text_lower = text.lower()
+    approved_facts = []
+    
+    # Education facts
+    for edu in structured_data.get("education", []):
+        if is_complete_fact(edu):
+            approved_facts.append(edu.strip())
+    
+    # Experience facts
+    for exp in structured_data.get("experience", []):
+        if is_complete_fact(exp):
+            approved_facts.append(exp.strip())
+    
+    # Skills (can be shorter)
+    for skill in structured_data.get("skills", []):
+        skill_clean = skill.strip()
+        if skill_clean and len(skill_clean.split()) >= 2:
+            approved_facts.append(skill_clean)
+    
+    # Achievements
+    for achievement in structured_data.get("achievements", []):
+        if is_complete_fact(achievement):
+            approved_facts.append(achievement.strip())
+    
+    # Research
+    for research in structured_data.get("research", []):
+        if is_complete_fact(research):
+            approved_facts.append(research.strip())
+    
+    # Remove duplicates (case-insensitive)
     seen = set()
+    unique_facts = []
+    for fact in approved_facts:
+        fact_lower = fact.lower()
+        if fact_lower not in seen:
+            seen.add(fact_lower)
+            unique_facts.append(fact)
     
-    # Education patterns
-    education_patterns = [
-        r'(?:degree|bachelor|master|phd|doctorate|ms|ma|bs|ba|m\.?s\.?c\.?|b\.?s\.?c\.?)\s+[^.!?]{10,100}',
-        r'(?:graduated|studied|attended)\s+[^.!?]{10,100}',
-        r'(?:university|college|school)\s+[^.!?]{10,100}',
-    ]
+    return unique_facts
+
+
+def is_complete_fact(fact: str) -> bool:
+    """
+    Validate if a fact is complete and acceptable.
+    """
+    if not fact or len(fact.strip()) < 5:
+        return False
     
-    for pattern in education_patterns:
-        matches = re.finditer(pattern, text, re.IGNORECASE)
-        for match in matches:
-            quote = match.group(0).strip()
-            if is_valid_fact(quote) and quote.lower() not in seen:
-                facts.append({
-                    "value": quote,
-                    "source_quote": quote,
-                    "start_index": match.start(),
-                    "end_index": match.end(),
-                    "confidence": 0.7,
-                    "category": "Education"
-                })
-                seen.add(quote.lower())
+    fact_lower = fact.lower()
     
-    # Experience patterns
-    experience_patterns = [
-        r'(?:worked|employed|interned|served|led|built|developed|created|designed|implemented)\s+[^.!?]{15,150}',
-        r'\d+\+?\s*(?:years?|months?)\s+(?:of\s+)?[^.!?]{10,100}',
-    ]
+    # Must have at least 5 words
+    words = fact.split()
+    if len(words) < 5:
+        return False
     
-    for pattern in experience_patterns:
-        matches = re.finditer(pattern, text, re.IGNORECASE)
-        for match in matches:
-            quote = match.group(0).strip()
-            if is_valid_fact(quote) and quote.lower() not in seen:
-                facts.append({
-                    "value": quote,
-                    "source_quote": quote,
-                    "start_index": match.start(),
-                    "end_index": match.end(),
-                    "confidence": 0.7,
-                    "category": "Work Experience"
-                })
-                seen.add(quote.lower())
+    # Reject broken fragments
+    if re.match(r'^\w+\s+(that|across|and|or)\s+\w+$', fact_lower):
+        return False
     
-    return facts
+    # Reject UI noise
+    ui_noise = ['see more', 'show all', 'expand', 'click', 'view', 'followers']
+    if any(noise in fact_lower for noise in ui_noise):
+        return False
+    
+    # Must be grammatically complete (has verb or is a complete phrase)
+    if not re.search(r'[.!?]|(?:worked|studied|led|built|developed|created|designed|implemented|graduated|earned|completed)', fact_lower):
+        # Check if it's a meaningful phrase with numbers or professional terms
+        if not re.search(r'\d+|(?:years?|experience|degree|university|college|company|engineer|developer|scientist)', fact_lower):
+            return False
+    
+    return True
+
+
+def extract_evidence_based_facts(
+    text: str,
+    api_key: str,
+    model: str = "llama-3.1-8b-instant"
+) -> List[Dict]:
+    """
+    Main extraction function implementing PHASE 1 and PHASE 2.
+    
+    Returns:
+        List of fact dictionaries for UI display
+    """
+    if not text or not text.strip():
+        return []
+    
+    # PHASE 1: Sanitize
+    sanitized = sanitize_profile_text(text)
+    
+    if not sanitized or len(sanitized.strip()) < 20:
+        return []
+    
+    # PHASE 1: Extract structured data
+    structured_data = extract_structured_profile_data(sanitized, api_key, model)
+    
+    # PHASE 2: Create approved facts
+    approved_facts_list = create_approved_facts(structured_data)
+    
+    # Convert to UI format
+    facts_for_ui = []
+    for idx, fact in enumerate(approved_facts_list):
+        # Find fact in original text
+        fact_lower = fact.lower()
+        start_idx = sanitized.lower().find(fact_lower)
+        
+        if start_idx == -1:
+            start_idx = 0
+            end_idx = len(fact)
+            source_quote = fact
+        else:
+            end_idx = start_idx + len(fact)
+            source_quote = sanitized[start_idx:end_idx]
+        
+        facts_for_ui.append({
+            "value": fact,
+            "source_quote": source_quote,
+            "start_index": start_idx,
+            "end_index": end_idx,
+            "confidence": 0.9,  # High confidence for approved facts
+            "category": determine_category(fact, structured_data)
+        })
+    
+    return facts_for_ui
+
+
+def determine_category(fact: str, structured_data: Dict) -> str:
+    """Determine category for a fact based on structured data."""
+    fact_lower = fact.lower()
+    
+    # Check which array it came from
+    for edu in structured_data.get("education", []):
+        if fact_lower == edu.lower():
+            return "Education"
+    
+    for exp in structured_data.get("experience", []):
+        if fact_lower == exp.lower():
+            return "Work Experience"
+    
+    for skill in structured_data.get("skills", []):
+        if fact_lower == skill.lower():
+            return "Technical Skills"
+    
+    for achievement in structured_data.get("achievements", []):
+        if fact_lower == achievement.lower():
+            return "Achievements"
+    
+    for research in structured_data.get("research", []):
+        if fact_lower == research.lower():
+            return "Research & Publications"
+    
+    # Fallback: guess from content
+    if any(word in fact_lower for word in ["degree", "university", "college", "graduated", "studied"]):
+        return "Education"
+    elif any(word in fact_lower for word in ["worked", "employed", "led", "built", "developed"]):
+        return "Work Experience"
+    else:
+        return "Other"
 
 
 def extract_structured_profile(form_data: Dict) -> List[Dict]:
     """
     Extract facts from structured form input.
-    Each field becomes a fact with the field name as category.
     """
     facts = []
     
@@ -377,7 +384,7 @@ def extract_structured_profile(form_data: Dict) -> List[Dict]:
     for key, value in form_data.items():
         if value and isinstance(value, str) and value.strip():
             value_clean = value.strip()
-            if is_valid_fact(value_clean):
+            if is_complete_fact(value_clean) or len(value_clean.split()) >= 2:
                 facts.append({
                     "value": value_clean,
                     "source_quote": value_clean,
@@ -391,12 +398,8 @@ def extract_structured_profile(form_data: Dict) -> List[Dict]:
 
 
 def validate_fact_evidence(fact: Dict, source_text: str) -> bool:
-    """
-    Validate that a fact's source_quote exists in source text.
-    """
+    """Validate that a fact's source_quote exists in source text."""
     source_quote = fact.get("source_quote", "")
     if not source_quote:
         return False
-    
-    # Case-insensitive check
     return source_quote.lower() in source_text.lower()

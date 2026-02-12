@@ -208,6 +208,7 @@ def run_all_checks(
     target_role: str = ""
 ) -> Dict:
     """
+    PHASE 4: Evaluation
     Run all validation checks on a message.
     
     Returns:
