@@ -631,6 +631,58 @@ elif st.session_state.stage == "results":
             st.session_state.evaluation_results = []
             st.rerun()
 
+def generate_fix_suggestions(run: Dict, scenario: Dict) -> List[str]:
+    """
+    Generate fix suggestions based on failure reasons.
+    """
+    suggestions = []
+    failure_reasons = run.get("failure_reasons", [])
+    message = run.get("message", "")
+    word_count = run.get("word_count", len(message.split()))
+    max_words = scenario.get("max_words", 150)
+    
+    for reason in failure_reasons:
+        reason_lower = reason.lower()
+        
+        if "word limit" in reason_lower:
+            excess = word_count - max_words
+            if excess > 0:
+                suggestions.append(f"Trim {excess} words to meet limit (currently {word_count}/{max_words})")
+        
+        elif "missing:" in reason_lower:
+            missing_item = reason.split("Missing:")[-1].strip()
+            if missing_item.lower() in ["github", "portfolio", "linkedin"]:
+                suggestions.append(f"Add explicit mention: '{missing_item}' or include link if available")
+            elif "chat" in missing_item.lower():
+                suggestions.append("Add explicit request: 'Would you be open to a 15-minute chat?' or 'Let's schedule a call'")
+            else:
+                suggestions.append(f"Include required item: {missing_item}")
+        
+        elif "fabricated" in reason_lower:
+            if "degree" in reason_lower:
+                suggestions.append("Remove fabricated degree. Only mention degrees from approved facts.")
+            elif "employer" in reason_lower:
+                suggestions.append("Remove fabricated employer. Only mention companies from approved facts.")
+            elif "year" in reason_lower:
+                suggestions.append("Remove fabricated year. Only mention dates from approved facts.")
+            else:
+                suggestions.append("Remove fabricated claim. Only use facts from approved list.")
+        
+        elif "unsupported" in reason_lower:
+            suggestions.append("Replace vague claim with specific metric from approved facts, or remove if not verifiable")
+        
+        elif "slang" in reason_lower:
+            detected = reason.split(":")[-1].strip() if ":" in reason else ""
+            suggestions.append(f"Replace slang '{detected}' with professional phrasing")
+        
+        elif "emoji" in reason_lower:
+            suggestions.append("Remove all emojis for professional tone")
+        
+        elif "exclamation" in reason_lower:
+            suggestions.append("Reduce exclamation marks to maximum 2")
+    
+    return suggestions
+
 # Footer
 st.markdown("""
 <div style="text-align: center; padding: 3rem 2rem; color: #94a3b8; font-size: 0.875rem; border-top: 1px solid #334155; margin-top: 4rem;">
