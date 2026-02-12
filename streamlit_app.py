@@ -280,7 +280,13 @@ Requirements:
                 
                 message = response.choices[0].message.content or ""
                 confidence = extract_confidence(message)
-                check_results = run_checks(message, max_words, must_include, allowed_facts, tone, strict_mode)
+                check_results = run_checks(
+                    message, max_words, must_include, allowed_facts, tone, strict_mode,
+                    company=company,
+                    target_role=target_role,
+                    recipient_type=recipient_type,
+                    channel=channel
+                )
                 
                 run_results.append({
                     "run": run_idx + 1,

@@ -138,7 +138,14 @@ Requirements:
         confidence = extract_confidence(message)
         
         # Run checks (default to relaxed mode)
-        check_results = run_checks(message, max_words, must_include, allowed_facts, tone, strict_mode=False)
+        check_results = run_checks(
+            message, max_words, must_include, allowed_facts, tone, 
+            strict_mode=False,
+            company=company,
+            target_role=target_role,
+            recipient_type=recipient_type,
+            channel=channel
+        )
         
         return {
             "id": prompt_id,

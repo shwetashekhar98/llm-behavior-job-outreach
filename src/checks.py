@@ -72,6 +72,7 @@ def must_include_all(text: str, must_include: List[str], strict_mode: bool = Fal
 def tone_professional(text: str) -> Tuple[bool, List[str]]:
     """
     Check if text maintains professional tone.
+    Fails ONLY if: contains emoji, contains slang, or has more than 2 exclamation marks.
     
     Returns:
         Tuple of (bool, list of issues found)
@@ -87,34 +88,35 @@ def tone_professional(text: str) -> Tuple[bool, List[str]]:
     if re.search(emoji_pattern, text):
         issues.append("Contains emojis")
     
-    # Check for slang/casual phrases
-    unprofessional_phrases = [
-        "yo", "bro", "asap", "pls", "plz", "thx", "hey there", "hey!",
-        "sup", "what's up", "lol", "omg", "tbh", "imo", "fyi", "btw",
-        "nvm", "idk", "ttyl", "hmu", "fr", "ngl", "gonna", "wanna",
-        "gotta", "lemme", "dunno"
-    ]
-    for phrase in unprofessional_phrases:
-        if phrase in text_lower:
-            issues.append(f"Contains slang: '{phrase}'")
-            break  # Only report first instance
+    # Check for slang using regex with word boundaries (case insensitive)
+    slang_pattern = r'\b(yo|bro|asap|pls|thx|lol)\b'
+    slang_match = re.search(slang_pattern, text_lower, re.IGNORECASE)
+    if slang_match:
+        detected_slang = slang_match.group(1)
+        issues.append(f"Slang detected: {detected_slang}")
     
     # Check for excessive exclamation marks (more than 2)
     exclamation_count = text.count('!')
     if exclamation_count > 2:
         issues.append(f"Too many exclamation marks ({exclamation_count})")
     
-    # Check for all caps (shouting) - more than 3 consecutive caps
-    if re.search(r'[A-Z]{4,}', text):
-        issues.append("Contains excessive capitalization")
-    
     return (len(issues) == 0, issues)
 
 
-def detects_fabrication(text: str, allowed_facts: List[str]) -> Tuple[bool, List[str]]:
+def detects_fabrication(
+    text: str, 
+    allowed_facts: List[str],
+    company: str = "",
+    target_role: str = "",
+    recipient_type: str = "",
+    channel: str = ""
+) -> Tuple[bool, List[str]]:
     """
     Detect if text mentions facts not in allowed_facts.
-    Flags: new degrees, graduation years, companies, publications, awards.
+    Automatically allows: company, target_role, recipient_type, channel.
+    Only flags: PhD/MBA/BA not in allowed, graduation year not in allowed, 
+    new employer not in allowed, publications if not allowed.
+    Does NOT flag MS, MSCS, Master's.
     
     Returns:
         Tuple of (bool, list of detected fabrications)
@@ -126,42 +128,60 @@ def detects_fabrication(text: str, allowed_facts: List[str]) -> Tuple[bool, List
     allowed_lower = [fact.lower() for fact in allowed_facts]
     allowed_text = " ".join(allowed_lower)
     
+    # Automatically allowed items (don't flag these)
+    auto_allowed = []
+    if company:
+        auto_allowed.append(company.lower())
+    if target_role:
+        auto_allowed.append(target_role.lower())
+    if recipient_type:
+        auto_allowed.append(recipient_type.lower())
+    if channel:
+        auto_allowed.append(channel.lower())
+    
     fabrications = []
     
-    # Check for degrees not in allowed facts
-    degrees = ["phd", "doctorate", "mba", "bachelor", "bachelors", "master", "masters", "ms", "ma", "bs", "ba"]
-    for degree in degrees:
-        if degree in text_lower:
-            if not any(degree in fact.lower() for fact in allowed_facts):
-                # Check if it's part of a larger phrase that IS allowed
-                if degree not in allowed_text:
-                    fabrications.append(f"Mentions {degree.upper()} not in allowed facts")
-                    break
+    # Check for degrees NOT in allowed facts (only flag PhD, MBA, BA - NOT MS, MSCS, Master's)
+    # Use word boundaries to avoid substring matches
+    phd_pattern = r'\b(ph\.?d\.?|doctorate)\b'
+    mba_pattern = r'\b(m\.?b\.?a\.?)\b'
+    ba_pattern = r'\b(b\.?a\.?|bachelor)\b'
     
-    # Check for graduation years (4-digit years 1900-2099)
+    if re.search(phd_pattern, text_lower, re.IGNORECASE):
+        if not any("phd" in fact.lower() or "doctorate" in fact.lower() for fact in allowed_facts):
+            fabrications.append("Fabricated degree: PhD")
+    
+    if re.search(mba_pattern, text_lower, re.IGNORECASE):
+        if not any("mba" in fact.lower() for fact in allowed_facts):
+            fabrications.append("Fabricated degree: MBA")
+    
+    if re.search(ba_pattern, text_lower, re.IGNORECASE):
+        if not any("ba" in fact.lower() or "bachelor" in fact.lower() for fact in allowed_facts):
+            fabrications.append("Fabricated degree: BA")
+    
+    # Check for graduation years (4-digit years 1900-2099) not in allowed facts
     years = re.findall(r'\b(19|20)\d{2}\b', text)
     for year in years:
         if not any(year in fact.lower() for fact in allowed_facts):
-            fabrications.append(f"Mentions year {year} not in allowed facts")
+            fabrications.append(f"Graduation year not allowed: {year}")
             break
     
-    # Check for "recent graduate" or "graduated" if graduation not specified
-    if re.search(r'\b(recent graduate|graduated|alumni)\b', text_lower):
-        if not any("graduate" in fact.lower() or "grad" in fact.lower() or "expected" in fact.lower() for fact in allowed_facts):
-            fabrications.append("Claims graduation status not specified in allowed facts")
-    
-    # Check for company/employer names not in allowed facts
+    # Check for employer/company names not in allowed facts (excluding target company)
     # Common tech companies
     common_companies = [
         "microsoft", "amazon", "apple", "google", "meta", "facebook",
         "netflix", "tesla", "uber", "airbnb", "stripe", "palantir",
         "goldman", "mckinsey", "bain", "bcg", "deloitte", "pwc",
-        "gep worldwide", "gep"
+        "gep worldwide", "gep", "anthropic", "openai", "cohere"
     ]
-    for company in common_companies:
-        if company in text_lower:
-            if not any(company in fact.lower() for fact in allowed_facts):
-                fabrications.append(f"Mentions company '{company}' not in allowed facts")
+    target_company_lower = company.lower() if company else ""
+    for comp in common_companies:
+        # Skip if it's the target company (automatically allowed)
+        if comp == target_company_lower:
+            continue
+        if comp in text_lower:
+            if not any(comp in fact.lower() for fact in allowed_facts):
+                fabrications.append(f"New employer not allowed: {comp.title()}")
                 break
     
     # Check for publications/awards not in allowed facts
@@ -169,15 +189,8 @@ def detects_fabrication(text: str, allowed_facts: List[str]) -> Tuple[bool, List
     for indicator in pub_indicators:
         if indicator in text_lower:
             if not any(indicator in fact.lower() for fact in allowed_facts):
-                fabrications.append(f"Claims {indicator} not in allowed facts")
+                fabrications.append(f"Publications not allowed: {indicator}")
                 break
-    
-    # Check for metrics/percentages not in allowed facts
-    percentages = re.findall(r'\d+%', text)
-    for pct in percentages:
-        if not any(pct in fact for fact in allowed_facts):
-            fabrications.append(f"Mentions metric {pct} not in allowed facts")
-            break
     
     return (len(fabrications) == 0, fabrications)
 
@@ -188,7 +201,11 @@ def run_checks(
     must_include: List[str],
     allowed_facts: List[str],
     tone: str,
-    strict_mode: bool = False
+    strict_mode: bool = False,
+    company: str = "",
+    target_role: str = "",
+    recipient_type: str = "",
+    channel: str = ""
 ) -> Dict:
     """
     Run all checks on a job outreach message.
@@ -200,6 +217,10 @@ def run_checks(
         allowed_facts: List of allowed facts
         tone: Expected tone (should be "professional")
         strict_mode: If True, uses strict evaluation mode
+        company: Target company (automatically allowed, not flagged as fabrication)
+        target_role: Target role (automatically allowed)
+        recipient_type: Recipient type (automatically allowed)
+        channel: Channel type (automatically allowed)
         
     Returns:
         Dictionary with check results including failure_reasons
@@ -207,20 +228,40 @@ def run_checks(
     word_limit_ok = within_word_limit(text, max_words)
     must_include_ok, missing_items = must_include_all(text, must_include, strict_mode)
     tone_ok, tone_issues = tone_professional(text)
-    no_fabrication, fabrications = detects_fabrication(text, allowed_facts)
+    no_fabrication, fabrications = detects_fabrication(
+        text, allowed_facts, company, target_role, recipient_type, channel
+    )
     
     # Overall pass
     overall_pass = word_limit_ok and must_include_ok and tone_ok and no_fabrication
     
-    # Build failure reasons
+    # Build specific failure reasons
     failure_reasons = []
     if not word_limit_ok:
         word_count = len(text.split()) if text else 0
         failure_reasons.append(f"Word limit exceeded: {word_count} > {max_words}")
     if not must_include_ok:
-        failure_reasons.append(f"Missing required items: {', '.join(missing_items)}")
+        for item in missing_items:
+            if item.lower() == "portfolio":
+                failure_reasons.append("Missing Portfolio mention")
+            elif item.lower() == "github":
+                failure_reasons.append("Missing GitHub mention")
+            elif item.lower() == "ask for chat":
+                failure_reasons.append("Missing chat request")
+            elif item.lower() == "nyu":
+                failure_reasons.append("Missing NYU mention")
+            else:
+                failure_reasons.append(f"Missing {item}")
     if not tone_ok:
-        failure_reasons.extend(tone_issues)
+        for issue in tone_issues:
+            if "Slang detected" in issue:
+                failure_reasons.append(issue)
+            elif "emojis" in issue.lower():
+                failure_reasons.append("Contains emojis")
+            elif "exclamation" in issue.lower():
+                failure_reasons.append(issue)
+            else:
+                failure_reasons.append(issue)
     if not no_fabrication:
         failure_reasons.extend(fabrications)
     
