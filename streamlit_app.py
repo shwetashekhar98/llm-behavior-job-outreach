@@ -15,9 +15,11 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from profile_extractor import (
+    extract_candidate_facts,
     extract_facts_with_evidence,
     extract_evidence_based_facts,
     extract_structured_profile,
+    prepare_approved_facts,
     validate_fact_evidence
 )
 from validation_engine import run_all_checks
@@ -84,6 +86,13 @@ if "stage" not in st.session_state:
     st.session_state.stage = "profile_input"
 if "approved_facts" not in st.session_state:
     st.session_state.approved_facts = []
+if "link_facts" not in st.session_state:
+    st.session_state.link_facts = {
+        "github": None,
+        "portfolio": None,
+        "linkedin": None,
+        "other_links": []
+    }
 if "scenarios" not in st.session_state:
     st.session_state.scenarios = []
 if "evaluation_results" not in st.session_state:
@@ -422,9 +431,10 @@ elif st.session_state.stage == "message_generation":
                             client,
                             scenario,
                             st.session_state.approved_facts,
+                            st.session_state.link_facts,
                             model,
                             runs,
-                            strict_mode
+                            "STRICT" if strict_mode else "RELAXED"
                         )
                         all_results.append(result)
                     

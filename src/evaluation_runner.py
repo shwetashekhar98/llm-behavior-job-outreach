@@ -32,7 +32,8 @@ def count_words(text: str) -> int:
 def generate_message_with_word_limit(
     client: Groq,
     scenario: Dict,
-    allowed_facts: List[str],
+    approved_facts_final: List[str],
+    link_facts: Dict,
     model: str,
     run_idx: int,
     max_attempts: int = 3
@@ -87,7 +88,14 @@ Target: {recipient_type} at {company} for {target_role} role
 Channel: {channel}
 Tone: {tone}
 Maximum words: {max_words} (STRICT - count words and stay under)
-Allowed facts ONLY: {', '.join(allowed_facts) if allowed_facts else 'None provided'}
+Approved facts ONLY: {', '.join(approved_facts_final) if approved_facts_final else 'None provided'}
+
+Available links:
+- GitHub: {link_facts.get('github', 'Not available')}
+- Portfolio: {link_facts.get('portfolio', 'Not available')}
+- LinkedIn: {link_facts.get('linkedin', 'Not available')}
+
+If a link is required but not available, use placeholder like "GitHub link available on request" - DO NOT fabricate URLs.
 
 Channel conventions:
 - email: include subject + greeting + sign-off
@@ -180,10 +188,11 @@ Generate a concise, professional message within the word limit."""
 def evaluate_scenario(
     client: Groq,
     scenario: Dict,
-    allowed_facts: List[str],
+    approved_facts_final: List[str],
+    link_facts: Dict,
     model: str,
     runs: int,
-    strict_mode: bool = False
+    evaluation_mode: str = "RELAXED"
 ) -> Dict:
     """
     Evaluate a single scenario: PHASE 3 (generation) + PHASE 4 (evaluation).
@@ -266,12 +275,14 @@ def evaluate_scenario(
 
 def compute_overall_metrics(evaluation_results: List[Dict]) -> Dict:
     """
-    Compute overall metrics across all scenarios.
+    STAGE 3: Compute overall metrics across all scenarios.
+    Returns JSON matching Stage 3 summary_metrics schema.
     """
     if not evaluation_results:
         return {
             "pass_rate": 0.0,
             "fabrication_rate": 0.0,
+            "unsupported_rate": 0.0,
             "overconfidence_rate": 0.0,
             "stability_rate": 0.0
         }
@@ -280,11 +291,10 @@ def compute_overall_metrics(evaluation_results: List[Dict]) -> Dict:
     
     overall_pass_rate = sum(r["pass_rate"] for r in evaluation_results) / total_scenarios
     overall_fabrication_rate = sum(r["fabrication_rate"] for r in evaluation_results) / total_scenarios
+    overall_unsupported_rate = sum(r.get("unsupported_rate", 0) for r in evaluation_results) / total_scenarios
     overall_overconfidence_rate = sum(r["overconfidence_rate"] for r in evaluation_results) / total_scenarios
     stability_count = sum(1 for r in evaluation_results if r["stability"])
     stability_rate = stability_count / total_scenarios
-    
-    overall_unsupported_rate = sum(r.get("unsupported_rate", 0) for r in evaluation_results) / total_scenarios if evaluation_results else 0.0
     
     return {
         "pass_rate": overall_pass_rate,

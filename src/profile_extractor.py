@@ -1,6 +1,6 @@
 """
-Profile-Driven Job Outreach LLM Evaluator - Evidence-Based Fact Extraction
-STAGE 1: Profile Input & Evidence Extraction
+Profile-Driven Job Outreach LLM Evaluator - STAGE 1: Evidence Extraction
+Extracts candidate facts with evidence quotes for human approval.
 """
 
 import re
@@ -10,9 +10,7 @@ from groq import Groq
 
 
 def sanitize_profile_text(text: str) -> str:
-    """
-    Clean profile text by removing UI artifacts, duplicates, and noise.
-    """
+    """Clean profile text by removing UI artifacts, duplicates, and noise."""
     if not text:
         return ""
     
@@ -67,40 +65,123 @@ def sanitize_profile_text(text: str) -> str:
     return cleaned.strip()
 
 
-def extract_facts_with_evidence(
+def is_complete_fact(fact: str) -> bool:
+    """
+    Validate if a fact is a complete claim (subject + verb + object).
+    Reject fragments, keywords, and incomplete phrases.
+    """
+    if not fact or len(fact.strip()) < 8:
+        return False
+    
+    words = fact.split()
+    if len(words) < 8:  # Must be at least 8 words
+        return False
+    
+    fact_lower = fact.lower()
+    
+    # Reject fragments
+    if re.match(r'^\w+\s+(that|across|and|or)\s+\w+$', fact_lower):
+        return False
+    
+    # Reject if mostly keywords (too many single-word items)
+    if len([w for w in words if len(w) <= 3]) > len(words) * 0.4:
+        return False
+    
+    # Reject ellipses/garbled truncation
+    if '...' in fact or re.search(r'\.{2,}', fact):
+        return False
+    
+    # Must have a verb (indicates a claim)
+    verbs = ['worked', 'led', 'built', 'developed', 'created', 'designed', 
+             'implemented', 'graduated', 'earned', 'completed', 'studied',
+             'attended', 'based', 'located', 'achieved', 'improved', 'reduced',
+             'increased', 'managed', 'collaborated', 'delivered']
+    if not any(verb in fact_lower for verb in verbs):
+        # Check if it's a location or link fact
+        if not (re.search(r'http', fact_lower) or re.search(r'\b(based in|located in|from)\b', fact_lower)):
+            return False
+    
+    return True
+
+
+def extract_urls(text: str) -> List[Dict]:
+    """Extract URLs from text and return as link facts."""
+    url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
+    urls = re.findall(url_pattern, text)
+    
+    link_facts = []
+    for url in urls:
+        url_lower = url.lower()
+        category = "links"
+        
+        if 'github' in url_lower:
+            fact_text = f"GitHub profile: {url}"
+        elif 'linkedin' in url_lower:
+            fact_text = f"LinkedIn profile: {url}"
+        elif 'portfolio' in url_lower or 'personal' in url_lower or 'website' in url_lower:
+            fact_text = f"Portfolio/website: {url}"
+        else:
+            fact_text = f"Profile link: {url}"
+        
+        link_facts.append({
+            "fact": fact_text,
+            "category": category,
+            "evidence": url,
+            "confidence": 0.95  # URLs are explicit
+        })
+    
+    return link_facts
+
+
+def extract_candidate_facts(
     profile_input: Dict,
     api_key: str,
     model: str = "llama-3.1-8b-instant"
-) -> List[Dict]:
+) -> Dict:
     """
-    STAGE 1: Extract facts from profile_input with evidence quotes.
+    STAGE 1: Extract candidate facts with evidence.
     
-    Args:
-        profile_input: Dict with structured_fields, unstructured_text, links
-        api_key: Groq API key
-        model: Model name
-        
-    Returns:
-        List of fact dictionaries with fact_text, evidence_quote, evidence_source, confidence, tags
+    Returns JSON matching Stage 1 schema:
+    {
+        "stage": 1,
+        "profile_parse_quality": "structured" | "semi_structured" | "messy_unstructured",
+        "candidate_facts": [...],
+        "warnings": [...]
+    }
     """
+    warnings = []
+    candidate_facts = []
+    
+    # Determine parse quality
+    structured_fields = profile_input.get("structured_fields", {})
+    unstructured_text = profile_input.get("unstructured_text", "")
+    links = profile_input.get("links", {})
+    
+    has_structured = bool(structured_fields)
+    has_unstructured = bool(unstructured_text and len(unstructured_text.strip()) > 50)
+    
+    if has_structured and not has_unstructured:
+        parse_quality = "structured"
+    elif has_structured and has_unstructured:
+        parse_quality = "semi_structured"
+    else:
+        parse_quality = "messy_unstructured"
+    
     # Combine all input sources
     all_text_parts = []
     
     # Structured fields
-    structured_fields = profile_input.get("structured_fields", {})
     for key, value in structured_fields.items():
         if value and isinstance(value, str):
             all_text_parts.append(f"{key}: {value}")
     
     # Unstructured text
-    unstructured = profile_input.get("unstructured_text", "")
-    if unstructured:
-        sanitized = sanitize_profile_text(unstructured)
+    if unstructured_text:
+        sanitized = sanitize_profile_text(unstructured_text)
         if sanitized:
             all_text_parts.append(sanitized)
     
     # Links
-    links = profile_input.get("links", {})
     for link_type, url in links.items():
         if url:
             all_text_parts.append(f"{link_type}: {url}")
@@ -108,64 +189,66 @@ def extract_facts_with_evidence(
     combined_text = "\n\n".join(all_text_parts)
     
     if not combined_text or len(combined_text.strip()) < 20:
-        return []
+        return {
+            "stage": 1,
+            "profile_parse_quality": parse_quality,
+            "candidate_facts": [],
+            "warnings": ["No meaningful profile content found"]
+        }
     
+    # Extract URLs first (always high confidence)
+    url_facts = extract_urls(combined_text)
+    candidate_facts.extend(url_facts)
+    
+    # Use LLM for fact extraction
     client = Groq(api_key=api_key)
     
     system_prompt = """You are a strict evidence-based fact extraction system.
 
-STAGE 1: PROFILE INPUT & EVIDENCE EXTRACTION
+STAGE 1: PROFILE INPUT → EVIDENCE EXTRACTION
 
-Extract FACTS (not keywords) from profile input. Each fact must be a complete claim.
+Extract candidate facts with evidence quotes for human approval.
 
 CRITICAL RULES:
-1. Extract FACTS, not keywords. A "fact" must be a complete claim that could appear in outreach.
-   Good facts:
-   - "MSCS candidate at NYU, expected May 2026" (if present)
-   - "4+ years backend/software engineering experience at <Company>" (if present)
-   - "Built telemetry/evaluation pipelines for LLM systems" (if present)
-   - "Based in <City>" (if present)
-   - "GitHub: <url>" (if present)
-   
-   Bad facts (reject):
-   - "Microsoft Office", "DBMS", single-word skill spam
-   - Fragments like "ms ... ms ..."
-   - Incomplete phrases
+1. A "fact" must be a COMPLETE CLAIM (subject + verb + object), e.g.:
+   - BAD: "Azure", "ms & ml pipelines", "monitoring"
+   - GOOD: "Led backend and API initiatives on Azure."
 
-2. Each fact must include:
-   - fact_text: cleaned, one sentence
-   - evidence_quote: <= 25 words copied exactly from input
-   - evidence_source: "structured_field:<key>", "unstructured_text", or "link:<type>"
-   - confidence: 0-100
-   - tags: ["education","experience","project","skill","link","location","achievement"]
+2. Reject any candidate fact that:
+   - is < 8 words, OR
+   - is a fragment, OR
+   - is mostly keywords, OR
+   - contains ellipses/garbled truncation, OR
+   - duplicates another fact
 
-3. Deduplicate facts and merge near-duplicates.
+3. Every candidate fact must include:
+   - fact: one sentence, no commas splicing multiple claims
+   - evidence: an exact quote snippet from the input (<= 160 chars)
+   - confidence: 0.50–0.95 (not 1.0 unless extremely explicit)
+   - category: one of ["education","work","impact","skills","projects","awards","links","location","other"]
 
-4. If profile is messy/unstructured:
-   - Extract fewer but higher-confidence facts
-   - Prefer exact phrases found in text
-   - Mark low-confidence items as "Needs approval" or "Ambiguous"
+4. If years or numbers are mentioned, keep them only if explicitly present (do not infer).
 
 5. NEVER fabricate. NEVER guess. NEVER assume.
 
 Return JSON:
 {
-  "extracted_facts": [
+  "candidate_facts": [
     {
-      "fact_text": "Complete fact statement",
-      "evidence_quote": "Exact quote from input (max 25 words)",
-      "evidence_source": "structured_field:experience",
-      "confidence": 95,
-      "tags": ["experience", "achievement"]
+      "fact": "Complete claim statement",
+      "category": "education|work|impact|skills|projects|awards|links|location|other",
+      "evidence": "Exact quote from input (max 160 chars)",
+      "confidence": 0.75
     }
-  ]
+  ],
+  "warnings": ["Any extraction issues"]
 }"""
 
-    user_prompt = f"""Extract professional facts from this profile input:
+    user_prompt = f"""Extract candidate facts from this profile input:
 
 {combined_text}
 
-Return JSON with extracted_facts array. Only include facts with clear evidence."""
+Return JSON with candidate_facts array. Only include complete claims with evidence."""
 
     try:
         response = client.chat.completions.create(
@@ -181,120 +264,197 @@ Return JSON with extracted_facts array. Only include facts with clear evidence."
         result_text = response.choices[0].message.content or "{}"
         result_json = json.loads(result_text)
         
-        facts_raw = result_json.get("extracted_facts", [])
+        extracted_facts = result_json.get("candidate_facts", [])
+        extraction_warnings = result_json.get("warnings", [])
+        warnings.extend(extraction_warnings)
         
-        # Validate and format facts
-        validated_facts = []
+        # Validate and filter facts
         seen_facts = set()
+        validated_facts = []
         
-        for fact_data in facts_raw:
-            fact_text = fact_data.get("fact_text", "").strip()
-            evidence_quote = fact_data.get("evidence_quote", fact_text).strip()
-            evidence_source = fact_data.get("evidence_source", "unstructured_text")
-            confidence = fact_data.get("confidence", 0)
-            tags = fact_data.get("tags", [])
+        for fact_data in extracted_facts:
+            fact_text = fact_data.get("fact", "").strip()
+            evidence = fact_data.get("evidence", fact_text).strip()
+            confidence = fact_data.get("confidence", 0.5)
+            category = fact_data.get("category", "other")
             
-            # Skip if confidence too low or fact too short
-            if confidence < 80 or len(fact_text) < 10:
-                continue
-            
-            # Skip duplicates
-            fact_lower = fact_text.lower()
-            if fact_lower in seen_facts:
-                continue
-            
-            # Validate fact is complete
+            # Validate fact completeness
             if not is_complete_fact(fact_text):
                 continue
             
-            # Find evidence in source text
-            if evidence_quote.lower() not in combined_text.lower():
-                # Try to find similar text
-                words = evidence_quote.split()[:5]
-                search_text = ' '.join(words)
-                if search_text.lower() not in combined_text.lower():
-                    continue  # Skip if evidence not found
+            # Check confidence range
+            if confidence < 0.50 or confidence > 0.95:
+                confidence = max(0.50, min(0.95, confidence))
+            
+            # Check evidence length
+            if len(evidence) > 160:
+                evidence = evidence[:157] + "..."
+            
+            # Dedupe by semantic similarity (simple: exact match)
+            fact_lower = fact_text.lower()
+            if fact_lower in seen_facts:
+                continue
+            seen_facts.add(fact_lower)
+            
+            # Validate category
+            valid_categories = ["education", "work", "impact", "skills", "projects", 
+                              "awards", "links", "location", "other"]
+            if category not in valid_categories:
+                category = "other"
             
             validated_facts.append({
-                "value": fact_text,
-                "source_quote": evidence_quote[:100],  # Limit quote length
-                "start_index": 0,  # Will be calculated if needed
-                "end_index": len(evidence_quote),
-                "confidence": confidence / 100.0,  # Convert to 0-1
-                "category": tags[0] if tags else "Other",
-                "evidence_source": evidence_source,
-                "tags": tags
+                "fact": fact_text,
+                "category": category,
+                "evidence": evidence,
+                "confidence": confidence
             })
-            
-            seen_facts.add(fact_lower)
         
-        return validated_facts
+        # Merge with URL facts (avoid duplicates)
+        url_fact_texts = {f["fact"].lower() for f in url_facts}
+        for fact in validated_facts:
+            if fact["fact"].lower() not in url_fact_texts:
+                candidate_facts.append(fact)
+        
+        if len(candidate_facts) == 0:
+            warnings.append("No valid facts extracted. Input may be too fragmented or incomplete.")
+        
+        return {
+            "stage": 1,
+            "profile_parse_quality": parse_quality,
+            "candidate_facts": candidate_facts,
+            "warnings": warnings
+        }
     
     except Exception as e:
-        # Fallback: simple extraction
-        return extract_simple_facts(combined_text)
+        warnings.append(f"Extraction error: {str(e)}")
+        return {
+            "stage": 1,
+            "profile_parse_quality": parse_quality,
+            "candidate_facts": candidate_facts,  # At least URL facts if any
+            "warnings": warnings
+        }
 
 
-def is_complete_fact(fact: str) -> bool:
-    """Validate if a fact is complete and acceptable."""
-    if not fact or len(fact.strip()) < 10:
-        return False
+def prepare_approved_facts(
+    approved_facts: List[str],
+    rejected_facts: List[str],
+    manual_facts: Optional[List[str]] = None
+) -> Dict:
+    """
+    STAGE 2: Prepare final fact set from user approvals.
     
-    words = fact.split()
-    if len(words) < 5:
-        return False
+    Returns JSON matching Stage 2 schema:
+    {
+        "stage": 2,
+        "approved_facts_final": [...],
+        "link_facts": {...},
+        "notes_for_generation": [...]
+    }
+    """
+    manual_facts = manual_facts or []
     
-    fact_lower = fact.lower()
+    # Merge approved + manual facts
+    all_facts = approved_facts + manual_facts
     
-    # Reject broken fragments
-    if re.match(r'^\w+\s+(that|across|and|or)\s+\w+$', fact_lower):
-        return False
-    
-    # Reject UI noise
-    ui_noise = ['see more', 'show all', 'expand', 'click', 'view']
-    if any(noise in fact_lower for noise in ui_noise):
-        return False
-    
-    # Must be a complete claim
-    if not re.search(r'[.!?]|(?:worked|studied|led|built|developed|created|designed|implemented|graduated|earned|completed|based|located)', fact_lower):
-        # Check if it's a meaningful phrase
-        if not re.search(r'\d+|(?:years?|experience|degree|university|college|company|engineer|developer|scientist)', fact_lower):
-            return False
-    
-    return True
-
-
-def extract_simple_facts(text: str) -> List[Dict]:
-    """Simple rule-based extraction as fallback."""
-    facts = []
+    # Dedupe
     seen = set()
+    approved_facts_final = []
+    for fact in all_facts:
+        fact_lower = fact.lower()
+        if fact_lower not in seen:
+            seen.add(fact_lower)
+            approved_facts_final.append(fact)
     
-    # Education patterns
-    patterns = [
-        (r'(?:degree|bachelor|master|phd|doctorate|ms|ma|bs|ba|m\.?s\.?c\.?|b\.?s\.?c\.?)\s+[^.!?]{10,100}', "Education"),
-        (r'(?:graduated|studied|attended)\s+[^.!?]{10,100}', "Education"),
-        (r'(?:worked|employed|interned|led|built|developed|created)\s+[^.!?]{15,150}', "Work Experience"),
-        (r'\d+\+?\s*(?:years?|months?)\s+(?:of\s+)?[^.!?]{10,100}', "Work Experience"),
-    ]
+    # Extract link facts
+    link_facts = {
+        "github": None,
+        "portfolio": None,
+        "linkedin": None,
+        "other_links": []
+    }
     
-    for pattern, category in patterns:
-        matches = re.finditer(pattern, text, re.IGNORECASE)
-        for match in matches:
-            quote = match.group(0).strip()
-            if is_complete_fact(quote) and quote.lower() not in seen:
-                facts.append({
-                    "value": quote,
-                    "source_quote": quote,
-                    "start_index": match.start(),
-                    "end_index": match.end(),
-                    "confidence": 0.7,
-                    "category": category,
-                    "evidence_source": "unstructured_text",
-                    "tags": [category.lower().replace(" ", "_")]
-                })
-                seen.add(quote.lower())
+    notes_for_generation = []
     
-    return facts
+    for fact in approved_facts_final:
+        fact_lower = fact.lower()
+        
+        # Extract GitHub URL
+        github_match = re.search(r'github[:\s]+(https?://[^\s]+)', fact_lower)
+        if github_match:
+            link_facts["github"] = github_match.group(1)
+        elif 'github' in fact_lower and 'http' in fact_lower:
+            url_match = re.search(r'https?://[^\s]+', fact)
+            if url_match:
+                link_facts["github"] = url_match.group(0)
+        
+        # Extract LinkedIn URL
+        linkedin_match = re.search(r'linkedin[:\s]+(https?://[^\s]+)', fact_lower)
+        if linkedin_match:
+            link_facts["linkedin"] = linkedin_match.group(1)
+        elif 'linkedin' in fact_lower and 'http' in fact_lower:
+            url_match = re.search(r'https?://[^\s]+', fact)
+            if url_match:
+                link_facts["linkedin"] = url_match.group(0)
+        
+        # Extract Portfolio URL
+        portfolio_match = re.search(r'(?:portfolio|website|personal)[:\s]+(https?://[^\s]+)', fact_lower)
+        if portfolio_match:
+            link_facts["portfolio"] = portfolio_match.group(1)
+        elif ('portfolio' in fact_lower or 'website' in fact_lower) and 'http' in fact_lower:
+            url_match = re.search(r'https?://[^\s]+', fact)
+            if url_match:
+                link_facts["portfolio"] = url_match.group(0)
+        
+        # Other links
+        if 'http' in fact_lower and not any(link in fact_lower for link in ['github', 'linkedin', 'portfolio']):
+            url_match = re.search(r'https?://[^\s]+', fact)
+            if url_match:
+                link_facts["other_links"].append(url_match.group(0))
+    
+    # Generate notes
+    if not link_facts["github"]:
+        notes_for_generation.append("GitHub link not available - use placeholder if required")
+    if not link_facts["portfolio"]:
+        notes_for_generation.append("Portfolio link not available - use placeholder if required")
+    if not link_facts["linkedin"]:
+        notes_for_generation.append("LinkedIn link not available - use placeholder if required")
+    
+    if len(approved_facts_final) < 3:
+        notes_for_generation.append("Limited approved facts - focus on strongest 1-2 facts in messages")
+    
+    return {
+        "stage": 2,
+        "approved_facts_final": approved_facts_final,
+        "link_facts": link_facts,
+        "notes_for_generation": notes_for_generation
+    }
+
+
+# Legacy compatibility functions
+def extract_facts_with_evidence(
+    profile_input: Dict,
+    api_key: str,
+    model: str = "llama-3.1-8b-instant"
+) -> List[Dict]:
+    """
+    Legacy wrapper that returns facts in UI format.
+    """
+    stage1_result = extract_candidate_facts(profile_input, api_key, model)
+    
+    # Convert to UI format
+    facts_for_ui = []
+    for idx, fact_data in enumerate(stage1_result["candidate_facts"]):
+        facts_for_ui.append({
+            "value": fact_data["fact"],
+            "source_quote": fact_data["evidence"],
+            "start_index": 0,
+            "end_index": len(fact_data["evidence"]),
+            "confidence": fact_data["confidence"],
+            "category": fact_data["category"].title(),
+            "evidence_source": "extracted"
+        })
+    
+    return facts_for_ui
 
 
 def extract_structured_profile(form_data: Dict) -> List[Dict]:
@@ -331,21 +491,3 @@ def validate_fact_evidence(fact: Dict, source_text: str) -> bool:
     if not source_quote:
         return False
     return source_quote.lower() in source_text.lower()
-
-
-# Legacy function for backward compatibility
-def extract_evidence_based_facts(
-    text: str,
-    api_key: str,
-    model: str = "llama-3.1-8b-instant"
-) -> List[Dict]:
-    """
-    Legacy wrapper for extract_facts_with_evidence.
-    Converts simple text input to profile_input format.
-    """
-    profile_input = {
-        "unstructured_text": text,
-        "structured_fields": {},
-        "links": {}
-    }
-    return extract_facts_with_evidence(profile_input, api_key, model)
