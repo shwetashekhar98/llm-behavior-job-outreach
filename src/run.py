@@ -43,7 +43,7 @@ def load_config() -> Dict[str, Any]:
     
     return {
         "api_key": os.getenv("GROQ_API_KEY"),
-        "model": os.getenv("MODEL", "llama3-8b-8192"),
+        "model": os.getenv("MODEL", "llama-3.1-8b-instant"),
         "runs_per_prompt": int(os.getenv("RUNS_PER_PROMPT", "3")),
         "temperature": float(os.getenv("TEMPERATURE", "0.2"))
     }

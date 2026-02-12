@@ -1,26 +1,24 @@
 """
-Simple Streamlit app for LLM Behavior Job Outreach evaluation.
+Simple, clean Streamlit app for Job Outreach LLM Evaluation.
 """
 
 import streamlit as st
 import json
 import pandas as pd
 from pathlib import Path
-from typing import List, Dict, Any
 from groq import Groq
 import sys
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 from checks import run_checks
 
-# Page config
 st.set_page_config(page_title="Job Outreach Eval", page_icon="💼", layout="wide")
 
-st.title("💼 Job Outreach LLM Evaluator")
-st.markdown("Test how well AI generates job application messages")
+st.title("💼 Job Outreach Evaluator")
+st.markdown("Test AI reliability for job application messages")
 
-# Sidebar - Simple settings
+# Sidebar
 with st.sidebar:
-    st.header("Settings")
+    st.header("⚙️ Settings")
     
     # API Key
     default_key = ""
@@ -31,16 +29,11 @@ with st.sidebar:
         pass
     
     api_key = st.text_input("Groq API Key", value=default_key, type="password")
-    
-    # Simple model selection
-    model = st.selectbox("AI Model", ["llama3-8b-8192", "llama3-70b-8192", "mixtral-8x7b-32768"], index=0)
-    
-    # Simple run count
-    runs = st.slider("Test each prompt this many times", 2, 5, 3)
+    model = st.selectbox("Model", ["llama-3.1-8b-instant", "llama-3.1-70b-versatile", "mixtral-8x7b-32768"], index=0)
+    runs = st.slider("Runs per prompt", 2, 5, 3)
 
-# Check API key
 if not api_key:
-    st.warning("Enter your Groq API key in the sidebar")
+    st.warning("⚠️ Enter your Groq API key in the sidebar")
     st.stop()
 
 # Load prompts
@@ -49,21 +42,45 @@ try:
     with open(prompts_path, 'r') as f:
         prompts = json.load(f)
 except Exception as e:
-    st.error(f"Error: {e}")
+    st.error(f"Error loading prompts: {e}")
     st.stop()
 
-# Test API key
+# Show prompts first
+st.header("📝 Test Prompts")
+st.markdown(f"**Total: {len(prompts)} prompts**")
+
+prompts_display = []
+for p in prompts:
+    prompts_display.append({
+        "ID": p["id"],
+        "Channel": p["channel"],
+        "Company": p["company"],
+        "Role": p["target_role"],
+        "Recipient": p["recipient_type"],
+        "Max Words": p["max_words"],
+        "Must Include": ", ".join(p["must_include"])
+    })
+
+st.dataframe(pd.DataFrame(prompts_display), use_container_width=True, hide_index=True)
+
+# Show details
+with st.expander("📋 View Prompt Details"):
+    for p in prompts:
+        st.markdown(f"### {p['id']} - {p['company']} ({p['channel']})")
+        st.markdown(f"**Role:** {p['target_role']} | **Recipient:** {p['recipient_type']}")
+        st.markdown(f"**Notes:** {p['notes']}")
+        st.markdown(f"**Allowed Facts:** {', '.join(p['allowed_facts'])}")
+        st.markdown(f"**Must Include:** {', '.join(p['must_include'])}")
+        st.divider()
+
+# Initialize client
 try:
     client = Groq(api_key=api_key)
-    with st.spinner("Checking API key..."):
-        # Groq doesn't have models.list(), just test with a simple call
-        pass
 except Exception as e:
     st.error(f"❌ API Error: {e}")
     st.stop()
 
 def extract_confidence(text: str) -> float:
-    """Extract confidence from text."""
     import re
     pattern = r'Confidence:\s*([0-9]*\.?[0-9]+)'
     match = re.search(pattern, text, re.IGNORECASE)
@@ -74,13 +91,16 @@ def extract_confidence(text: str) -> float:
             return 0.5
     return 0.5
 
-# Run button
+# Run evaluation
 if st.button("🚀 Run Evaluation", type="primary", use_container_width=True):
-    progress = st.progress(0)
-    results = []
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    all_results = []
     
     for idx, prompt_data in enumerate(prompts):
-        progress.progress((idx + 1) / len(prompts))
+        progress = (idx + 1) / len(prompts)
+        progress_bar.progress(progress)
+        status_text.text(f"Evaluating {prompt_data['id']} ({idx + 1}/{len(prompts)})...")
         
         prompt_id = prompt_data["id"]
         channel = prompt_data["channel"]
@@ -91,31 +111,31 @@ if st.button("🚀 Run Evaluation", type="primary", use_container_width=True):
         allowed_facts = prompt_data["allowed_facts"]
         must_include = prompt_data["must_include"]
         notes = prompt_data["notes"]
+        recipient_type = prompt_data["recipient_type"]
         
-        system_prompt = f"""You are a professional job outreach assistant. Generate a {tone} {channel} message for a job application.
+        system_prompt = f"""You are a professional job outreach assistant. Generate a {tone} {channel} message.
 
 Rules:
-- Target: {prompt_data['recipient_type']} at {company} for {target_role} role
+- Target: {recipient_type} at {company} for {target_role}
 - Tone: {tone}
 - Maximum {max_words} words
 - Must include: {', '.join(must_include)}
-- ONLY mention these facts: {', '.join(allowed_facts)}. Do not add any other facts, companies, years, or details.
-- For email: Include a subject line. For LinkedIn DM: No subject line.
-- End with exactly: Confidence: <number between 0 and 1>"""
+- ONLY use these facts: {', '.join(allowed_facts)}
+- For email: Include subject line. For LinkedIn DM: No subject.
+- End with: Confidence: <0-1>"""
         
-        user_prompt = f"""Generate a {channel} message based on these notes:
+        user_prompt = f"""Generate a {channel} message:
 
 {notes}
 
 Company: {company}
 Role: {target_role}
-Recipient: {prompt_data['recipient_type']}
+Recipient: {recipient_type}
 
 Requirements:
-- {tone} tone
-- Max {max_words} words
+- {tone} tone, max {max_words} words
 - Must include: {', '.join(must_include)}
-- Only use these facts: {', '.join(allowed_facts)}"""
+- Only use: {', '.join(allowed_facts)}"""
         
         run_results = []
         for run_idx in range(runs):
@@ -132,8 +152,6 @@ Requirements:
                 
                 message = response.choices[0].message.content or ""
                 confidence = extract_confidence(message)
-                
-                # Run checks
                 check_results = run_checks(message, max_words, must_include, allowed_facts, tone)
                 
                 run_results.append({
@@ -147,6 +165,10 @@ Requirements:
                     "message": message
                 })
             except Exception as e:
+                error_msg = str(e)
+                if "decommissioned" in error_msg.lower():
+                    st.error(f"❌ Model {model} is decommissioned. Please select a different model.")
+                    st.stop()
                 run_results.append({
                     "run": run_idx + 1,
                     "confidence": 0.0,
@@ -155,75 +177,77 @@ Requirements:
                     "must_include": False,
                     "tone_ok": False,
                     "new_facts": True,
-                    "message": f"Error: {str(e)}"
+                    "message": f"Error: {error_msg[:200]}"
                 })
         
-        # Calculate metrics for this prompt
+        # Metrics
         pass_count = sum(1 for r in run_results if r["overall_pass"])
-        pass_rate = pass_count / len(run_results)
+        pass_rate = pass_count / len(run_results) if run_results else 0.0
         stability = len(set(r["overall_pass"] for r in run_results)) == 1
         overconfident = any(r["confidence"] >= 0.75 and not r["overall_pass"] for r in run_results)
         
-        results.append({
-            "Prompt": prompt_id,
-            "Channel": channel,
-            "Company": company,
-            "Role": target_role,
-            "Pass Rate": f"{pass_rate:.2f}",
-            "Stable": "Yes" if stability else "No",
-            "Overconfident": "Yes" if overconfident else "No",
-            "Runs": run_results
+        all_results.append({
+            "id": prompt_id,
+            "channel": channel,
+            "company": company,
+            "role": target_role,
+            "pass_rate": pass_rate,
+            "stability": stability,
+            "overconfident": overconfident,
+            "runs": run_results
         })
     
-    progress.progress(1.0)
+    progress_bar.progress(1.0)
+    status_text.text("✅ Complete!")
     
-    # Show results
-    st.success("✅ Evaluation complete!")
+    # Results
+    st.header("📊 Results")
     
-    # Summary
-    st.subheader("Summary")
-    summary_df = pd.DataFrame([{
-        "Prompt": r["Prompt"],
-        "Channel": r["Channel"],
-        "Company": r["Company"],
-        "Role": r["Role"],
-        "Pass Rate": r["Pass Rate"],
-        "Stable": r["Stable"],
-        "Overconfident": r["Overconfident"]
-    } for r in results])
-    
-    st.dataframe(summary_df, use_container_width=True, hide_index=True)
-    
-    # Overall stats
+    # Summary metrics
     col1, col2, col3, col4 = st.columns(4)
-    avg_pass = sum(float(r["Pass Rate"]) for r in results) / len(results)
-    stable_count = sum(1 for r in results if r["Stable"] == "Yes")
-    overconf_count = sum(1 for r in results if r["Overconfident"] == "Yes")
+    avg_pass = sum(r["pass_rate"] for r in all_results) / len(all_results) if all_results else 0.0
+    stable_count = sum(1 for r in all_results if r["stability"])
+    overconf_count = sum(1 for r in all_results if r["overconfident"])
     
     with col1:
-        st.metric("Avg Pass Rate", f"{avg_pass:.2f}")
+        st.metric("Avg Pass Rate", f"{avg_pass:.2%}")
     with col2:
-        st.metric("Stable Prompts", f"{stable_count}/{len(results)}")
+        st.metric("Stable", f"{stable_count}/{len(all_results)}")
     with col3:
-        st.metric("Overconfident", f"{overconf_count}/{len(results)}")
+        st.metric("Overconfident", f"{overconf_count}/{len(all_results)}")
     with col4:
-        st.metric("Total Prompts", len(results))
+        st.metric("Total", len(all_results))
     
-    # Detailed results
-    with st.expander("📋 View Detailed Results"):
-        for result in results:
-            st.markdown(f"### {result['Prompt']} - {result['Company']} ({result['Channel']})")
-            for run in result["Runs"]:
-                st.markdown(f"**Run {run['run']}** (Confidence: {run['confidence']:.2f})")
-                st.markdown(f"- Word Limit: {'✓' if run['word_limit'] else '✗'}")
-                st.markdown(f"- Must Include: {'✓' if run['must_include'] else '✗'}")
-                st.markdown(f"- Tone: {'✓' if run['tone_ok'] else '✗'}")
-                st.markdown(f"- New Facts: {'✗' if run['new_facts'] else '✓'}")
-                st.markdown(f"- **Overall: {'✓ PASS' if run['overall_pass'] else '✗ FAIL'}**")
-                st.text_area("Message", run["message"], height=100, key=f"{result['Prompt']}_run{run['run']}")
+    # Results table
+    results_df = pd.DataFrame([{
+        "Prompt": r["id"],
+        "Company": r["company"],
+        "Role": r["role"],
+        "Channel": r["channel"],
+        "Pass Rate": f"{r['pass_rate']:.2%}",
+        "Stable": "✓" if r["stability"] else "✗",
+        "Overconf": "✗" if r["overconfident"] else "✓"
+    } for r in all_results])
+    
+    st.dataframe(results_df, use_container_width=True, hide_index=True)
+    
+    # Detailed view
+    st.subheader("📋 Detailed Results")
+    for result in all_results:
+        with st.expander(f"{result['id']} - {result['company']} ({result['channel']})"):
+            for run in result["runs"]:
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    status = "✅ PASS" if run["overall_pass"] else "❌ FAIL"
+                    st.markdown(f"**Run {run['run']}** - {status} (Confidence: {run['confidence']:.2f})")
+                with col2:
+                    st.markdown(f"Word: {'✓' if run['word_limit'] else '✗'} | "
+                              f"Include: {'✓' if run['must_include'] else '✗'} | "
+                              f"Tone: {'✓' if run['tone_ok'] else '✗'} | "
+                              f"Facts: {'✓' if not run['new_facts'] else '✗'}")
+                st.text_area("Message", run["message"], height=80, key=f"{result['id']}_run{run['run']}", label_visibility="collapsed")
                 st.divider()
     
     # Download
-    csv_data = summary_df.to_csv(index=False)
-    st.download_button("Download Summary", csv_data, "job_outreach_results.csv", "text/csv")
-
+    csv_data = results_df.to_csv(index=False)
+    st.download_button("📥 Download Results", csv_data, "results.csv", "text/csv")
