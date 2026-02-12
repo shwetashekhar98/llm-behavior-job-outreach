@@ -14,6 +14,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from profile_extractor import (
+    extract_facts_with_evidence,
     extract_evidence_based_facts,
     extract_structured_profile,
     validate_fact_evidence
@@ -501,17 +502,19 @@ elif st.session_state.stage == "results":
                 f"Pass Rate: {result['pass_rate']:.1%}",
                 expanded=False
             ):
-                col1, col2, col3, col4 = st.columns(4)
+                col1, col2, col3, col4, col5 = st.columns(5)
                 with col1:
                     st.metric("Pass Rate", f"{result['pass_rate']:.1%}")
                 with col2:
                     st.metric("Fabrication", f"{result['fabrication_rate']:.1%}")
                 with col3:
+                    st.metric("Unsupported", f"{result.get('unsupported_rate', 0):.1%}")
+                with col4:
                     render_badge("✓ Stable" if result["stability"] else "✗ Unstable", 
                                 "success" if result["stability"] else "warning")
-                with col4:
-                    render_badge("⚠️ Overconfident" if result["overconfident"] else "✓ Confident",
-                                "fail" if result["overconfident"] else "success")
+                with col5:
+                    render_badge("⚠️ Overconfident" if result.get("overconfident", False) else "✓ Confident",
+                                "fail" if result.get("overconfident", False) else "success")
                 
                 st.divider()
                 
