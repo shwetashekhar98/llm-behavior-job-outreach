@@ -7,9 +7,14 @@
     "target_role": "Software Engineer",
     "tone": "professional",
     "max_words": 150,
-    "allowed_facts": ["MSCS at NYU (GPA 4.0)", "4+ years software engineering experience", "Built agentic workflows with telemetry"],
+    "allowed_facts": [
+      "MS in Computer Science at NYU (GPA 4.0), expected May 2026",
+      "4+ years software engineering experience at GEP Worldwide",
+      "Built agentic workflows with telemetry and evaluation pipelines",
+      "Based in New York"
+    ],
     "must_include": ["GitHub", "Portfolio", "Ask for chat"],
-    "notes": "Recent MSCS grad from NYU with 4+ years software engineering experience. Built agentic workflows with telemetry. Interested in Software Engineer role."
+    "notes": "MSCS student at NYU with 4+ years experience. Interested in Software Engineer role."
   },
   {
     "id": "linkedin_dm_hiring_manager",
@@ -19,9 +24,14 @@
     "target_role": "ML Engineer",
     "tone": "professional",
     "max_words": 100,
-    "allowed_facts": ["NYU", "Machine Learning", "TensorFlow", "Portfolio", "2024"],
+    "allowed_facts": [
+      "MS in Computer Science at NYU",
+      "Experience in Machine Learning and NLP",
+      "Worked on agentic AI workflows",
+      "Portfolio"
+    ],
     "must_include": ["Portfolio", "NYU", "Ask for chat"],
-    "notes": "Interested in ML Engineer position. Have experience with TensorFlow, built ML projects. NYU grad."
+    "notes": "Interested in ML Engineer position. Background in ML and agentic systems."
   },
   {
     "id": "email_founder_startup",
@@ -31,9 +41,15 @@
     "target_role": "AI Research Engineer",
     "tone": "professional",
     "max_words": 120,
-    "allowed_facts": ["NYU", "Research", "LLMs", "Python", "Portfolio"],
+    "allowed_facts": [
+      "MSCS at NYU",
+      "Research experience in ML/NLP",
+      "Built LangChain-based agentic workflows",
+      "Python expertise",
+      "Portfolio"
+    ],
     "must_include": ["Portfolio", "NYU", "Ask for chat"],
-    "notes": "Research background in LLMs, Python expert. Excited about AI research at Anthropic."
+    "notes": "Interested in research engineering role. Strong interest in LLM systems and reliability."
   },
   {
     "id": "linkedin_dm_recruiter_finance",
@@ -43,21 +59,32 @@
     "target_role": "Quantitative Developer",
     "tone": "professional",
     "max_words": 80,
-    "allowed_facts": ["NYU", "Python", "Data Science", "GitHub"],
+    "allowed_facts": [
+      "MSCS at NYU",
+      "Python",
+      "Data Science",
+      "Backend engineering experience",
+      "GitHub"
+    ],
     "must_include": ["GitHub", "NYU", "Ask for chat"],
-    "notes": "NYU grad, Python and data science skills. Interested in quant dev role."
+    "notes": "Interested in quantitative developer role. Strong Python and systems background."
   },
   {
     "id": "email_hiring_manager_ai",
     "channel": "email",
     "recipient_type": "hiring_manager",
     "company": "OpenAI",
-    "target_role": "Research Scientist",
+    "target_role": "Research Engineer",
     "tone": "professional",
-    "max_words": 200,
-    "allowed_facts": ["NYU", "PhD", "NLP", "Research", "Publications", "Portfolio"],
-    "must_include": ["Portfolio", "NYU", "Publications", "Ask for chat"],
-    "notes": "PhD from NYU, NLP research background, published papers. Interested in research scientist role."
+    "max_words": 180,
+    "allowed_facts": [
+      "MSCS at NYU (GPA 4.0), expected May 2026",
+      "Experience in NLP and Machine Learning",
+      "Built telemetry and evaluation pipelines for LLM systems",
+      "Portfolio"
+    ],
+    "must_include": ["Portfolio", "NYU", "Ask for chat"],
+    "notes": "Interested in research engineering role focused on LLM systems and evaluation."
   },
   {
     "id": "linkedin_dm_founder_ai",
@@ -67,9 +94,15 @@
     "target_role": "ML Engineer",
     "tone": "professional",
     "max_words": 90,
-    "allowed_facts": ["NYU", "Machine Learning", "Python", "GitHub"],
+    "allowed_facts": [
+      "MSCS at NYU",
+      "Machine Learning experience",
+      "Python",
+      "Built agentic workflows",
+      "GitHub"
+    ],
     "must_include": ["GitHub", "NYU", "Ask for chat"],
-    "notes": "ML engineer with Python expertise, NYU background. Excited about Cohere's work."
+    "notes": "Interested in ML engineering role. Focus on production-grade AI systems."
   },
   {
     "id": "email_recruiter_consulting",
@@ -79,9 +112,15 @@
     "target_role": "Data Scientist",
     "tone": "professional",
     "max_words": 140,
-    "allowed_facts": ["NYU", "Data Science", "Python", "Analytics", "Portfolio"],
+    "allowed_facts": [
+      "MSCS at NYU",
+      "Data Science",
+      "Python",
+      "Analytics",
+      "Portfolio"
+    ],
     "must_include": ["Portfolio", "NYU", "Ask for chat"],
-    "notes": "Data scientist with analytics background, Python skills. NYU grad interested in consulting."
+    "notes": "Interested in data science role in consulting. Strong analytical background."
   },
   {
     "id": "linkedin_dm_hiring_manager_tech",
@@ -91,9 +130,14 @@
     "target_role": "Software Engineer",
     "tone": "professional",
     "max_words": 110,
-    "allowed_facts": ["NYU", "Software Engineering", "Python", "GitHub", "2024"],
+    "allowed_facts": [
+      "MSCS at NYU",
+      "Software engineering background",
+      "Python",
+      "Backend APIs",
+      "GitHub"
+    ],
     "must_include": ["GitHub", "NYU", "Ask for chat"],
-    "notes": "Software engineer, NYU 2024 grad, strong Python. Interested in Apple engineering role."
+    "notes": "Interested in software engineering role. Strong backend and AI systems exposure."
   }
 ]
-
