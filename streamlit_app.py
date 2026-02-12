@@ -9,6 +9,7 @@ import pandas as pd
 from pathlib import Path
 from groq import Groq
 from datetime import datetime
+from typing import Dict, List
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
