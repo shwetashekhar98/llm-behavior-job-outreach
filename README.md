@@ -46,7 +46,7 @@ llm-behavior-job-outreach/
    # Create .env file
    cat > .env << EOF
    GROQ_API_KEY=your_key_here
-   MODEL=llama3-8b-8192
+   MODEL=llama-3.1-8b-instant
    RUNS_PER_PROMPT=3
    TEMPERATURE=0.2
    EOF
@@ -56,7 +56,7 @@ llm-behavior-job-outreach/
    **Get Groq API Key:** https://console.groq.com/keys
 
 3. **Optional configuration** (in `.env`):
-   - `MODEL`: Model to test (default: `llama3-8b-8192`)
+   - `MODEL`: Model to test (default: `llama-3.1-8b-instant`)
    - `RUNS_PER_PROMPT`: Number of runs per prompt (default: `3`)
    - `TEMPERATURE`: Sampling temperature (default: `0.2`)
 
