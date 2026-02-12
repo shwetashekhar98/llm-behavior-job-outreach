@@ -17,7 +17,6 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 from profile_extractor import (
     extract_candidate_facts,
     extract_facts_with_evidence,
-    extract_evidence_based_facts,
     extract_structured_profile,
     prepare_approved_facts,
     validate_fact_evidence
