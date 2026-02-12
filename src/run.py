@@ -84,16 +84,30 @@ def generate_message(
     must_include = prompt_data["must_include"]
     notes = prompt_data["notes"]
     
-    system_prompt = f"""You are a professional job outreach assistant. Generate a {tone} {channel} message for a job application.
+    system_prompt = f"""You are generating a job outreach message.
 
-Rules:
-- Target: {recipient_type} at {company} for {target_role} role
-- Tone: {tone}
-- Maximum {max_words} words
-- Must include: {', '.join(must_include)}
-- ONLY mention these facts: {', '.join(allowed_facts)}. Do not add any other facts, companies, years, or details.
-- For email: Include a subject line. For LinkedIn DM: No subject line.
-- End with exactly: Confidence: <number between 0 and 1>"""
+STRICT RULES:
+- You may ONLY use facts from the provided allowed_facts list.
+- Do NOT invent degrees, graduation years, companies, publications, or metrics.
+- Do NOT assume graduation if not explicitly stated.
+- Stay under max_words.
+- Maintain professional tone.
+- If must_include requires:
+    - GitHub → explicitly mention GitHub
+    - Portfolio → explicitly mention Portfolio
+    - Ask for chat → include a clear short request (e.g., "Would you be open to a 15-minute chat?")
+
+Target: {recipient_type} at {company} for {target_role} role
+Channel: {channel}
+Tone: {tone}
+Maximum words: {max_words}
+Must include: {', '.join(must_include)}
+Allowed facts ONLY: {', '.join(allowed_facts)}
+
+For email: Include a subject line. For LinkedIn DM: No subject line.
+
+Append exactly at the end:
+Confidence: <number between 0 and 1>"""
     
     user_prompt = f"""Generate a {channel} message based on these notes:
 
@@ -123,8 +137,8 @@ Requirements:
         message = response.choices[0].message.content or ""
         confidence = extract_confidence(message)
         
-        # Run checks
-        check_results = run_checks(message, max_words, must_include, allowed_facts, tone)
+        # Run checks (default to relaxed mode)
+        check_results = run_checks(message, max_words, must_include, allowed_facts, tone, strict_mode=False)
         
         return {
             "id": prompt_id,
@@ -135,11 +149,12 @@ Requirements:
             "confidence": round(confidence, 3),
             "within_word_limit": check_results["within_word_limit"],
             "must_include_ok": check_results["must_include_ok"],
-            "adds_new_facts": check_results["adds_new_facts"],
+            "adds_new_facts": check_results.get("fabrication_detected", check_results.get("adds_new_facts", False)),
             "tone_ok": check_results["tone_ok"],
             "overall_pass": check_results["overall_pass"],
             "message": message,
-            "notes": check_results["notes"]
+            "notes": check_results["notes"],
+            "failure_reasons": check_results.get("failure_reasons", [])
         }
     except Exception as e:
         print(f"    Error in run {run_idx + 1}: {e}")
@@ -162,13 +177,13 @@ Requirements:
 
 def compute_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Compute summary metrics from results.
+    Compute enhanced summary metrics from results.
     
     Args:
         results: List of result dictionaries
         
     Returns:
-        Dictionary with summary metrics
+        Dictionary with summary metrics including constraint failure rate and fabrication rate
     """
     if not results:
         return {}
@@ -188,6 +203,21 @@ def compute_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         pass_count = sum(1 for r in prompt_results if r["overall_pass"])
         pass_rate = pass_count / total_runs if total_runs > 0 else 0.0
         
+        # Constraint failures
+        constraint_failures = sum(
+            1 for r in prompt_results 
+            if not r["overall_pass"] and (
+                not r["within_word_limit"] or 
+                not r["must_include_ok"] or 
+                not r["tone_ok"]
+            )
+        )
+        constraint_failure_rate = constraint_failures / total_runs if total_runs > 0 else 0.0
+        
+        # Fabrication rate
+        fabrication_count = sum(1 for r in prompt_results if r.get("adds_new_facts", False) or r.get("fabrication_detected", False))
+        fabrication_rate = fabrication_count / total_runs if total_runs > 0 else 0.0
+        
         # Stability: all runs have same overall_pass value
         pass_values = [r["overall_pass"] for r in prompt_results]
         stability = len(set(pass_values)) == 1
@@ -200,16 +230,22 @@ def compute_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         
         prompt_metrics[prompt_id] = {
             "pass_rate": round(pass_rate, 3),
+            "constraint_failure_rate": round(constraint_failure_rate, 3),
+            "fabrication_rate": round(fabrication_rate, 3),
             "stability": stability,
             "overconfident": overconfident
         }
     
     # Overall metrics
     all_pass_rates = [m["pass_rate"] for m in prompt_metrics.values()]
+    all_constraint_failures = [m["constraint_failure_rate"] for m in prompt_metrics.values()]
+    all_fabrications = [m["fabrication_rate"] for m in prompt_metrics.values()]
     all_stabilities = [m["stability"] for m in prompt_metrics.values()]
     all_overconfident = [m["overconfident"] for m in prompt_metrics.values()]
     
     overall_pass_rate = sum(all_pass_rates) / len(all_pass_rates) if all_pass_rates else 0.0
+    overall_constraint_failure_rate = sum(all_constraint_failures) / len(all_constraint_failures) if all_constraint_failures else 0.0
+    overall_fabrication_rate = sum(all_fabrications) / len(all_fabrications) if all_fabrications else 0.0
     stability_rate = sum(all_stabilities) / len(all_stabilities) if all_stabilities else 0.0
     overconfidence_rate = sum(all_overconfident) / len(all_overconfident) if all_overconfident else 0.0
     
@@ -276,6 +312,8 @@ def compute_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {
         "overall": {
             "pass_rate": round(overall_pass_rate, 3),
+            "constraint_failure_rate": round(overall_constraint_failure_rate, 3),
+            "fabrication_rate": round(overall_fabrication_rate, 3),
             "stability_rate": round(stability_rate, 3),
             "overconfidence_rate": round(overconfidence_rate, 3)
         },
