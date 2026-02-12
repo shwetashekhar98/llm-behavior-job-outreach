@@ -203,10 +203,12 @@ def evaluate_scenario(
     scenario_id = scenario.get("id", f"scenario_{hash(str(scenario))}")
     results = []
     
+    strict_mode = (evaluation_mode == "STRICT")
+    
     for run_idx in range(runs):
-        # PHASE 3: Generate message
+        # STAGE 3: Generate message
         gen_result = generate_message_with_word_limit(
-            client, scenario, allowed_facts, model, run_idx
+            client, scenario, approved_facts_final, link_facts, model, run_idx
         )
         
         if gen_result["error"]:
@@ -222,12 +224,12 @@ def evaluate_scenario(
                 "notes": f"Error: {gen_result['error']}"
             }
         else:
-            # PHASE 4: Evaluation
+            # STAGE 3: Evaluation
             check_result = run_all_checks(
                 gen_result["message"],
                 scenario.get("max_words", 150),
                 scenario.get("must_include", []),
-                allowed_facts,
+                approved_facts_final,
                 strict_mode,
                 scenario.get("company", ""),
                 scenario.get("target_role", "")

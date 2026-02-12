@@ -339,7 +339,19 @@ elif st.session_state.stage == "fact_confirmation":
         col1, col2 = st.columns(2)
         with col1:
             if st.button("✅ Confirm Facts", type="primary", use_container_width=True):
-                st.session_state.approved_facts = approved_facts
+                # Use Stage 2 preparation
+                rejected_facts = [f["value"] for idx, f in enumerate(extracted_facts) 
+                                 if not st.session_state.fact_states.get(idx, False)]
+                manual_facts_list = [f for f in approved_facts if f not in [fact.get("value", "") for fact in extracted_facts]]
+                
+                stage2_result = prepare_approved_facts(
+                    approved_facts,
+                    rejected_facts,
+                    manual_facts_list
+                )
+                
+                st.session_state.approved_facts = stage2_result["approved_facts_final"]
+                st.session_state.link_facts = stage2_result["link_facts"]
                 st.session_state.stage = "message_generation"
                 st.rerun()
         
