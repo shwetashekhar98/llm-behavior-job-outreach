@@ -1,143 +1,105 @@
-[
-  {
-    "id": "E1",
-    "channel": "email",
-    "recipient_type": "recruiter",
-    "company": "Google",
-    "target_role": "Software Engineer",
-    "tone": "professional",
-    "max_words": 150,
+{
+  "profile": {
     "allowed_facts": [
       "MS in Computer Science at NYU (GPA 4.0), expected May 2026",
       "4+ years software engineering experience at GEP Worldwide",
       "Built agentic workflows with telemetry and evaluation pipelines",
       "Based in New York"
     ],
-    "must_include": ["GitHub", "Portfolio", "Ask for chat"],
-    "notes": "MSCS student at NYU with 4+ years experience. Interested in Software Engineer role."
+    "links": {
+      "github": "https://github.com/username",
+      "portfolio": "https://portfolio.example.com",
+      "linkedin": "https://linkedin.com/in/username"
+    }
   },
-  {
-    "id": "linkedin_dm_hiring_manager",
-    "channel": "linkedin_dm",
-    "recipient_type": "hiring_manager",
-    "company": "Meta",
-    "target_role": "ML Engineer",
-    "tone": "professional",
-    "max_words": 100,
-    "allowed_facts": [
-      "MS in Computer Science at NYU",
-      "Experience in Machine Learning and NLP",
-      "Worked on agentic AI workflows",
-      "Portfolio"
-    ],
-    "must_include": ["Portfolio", "NYU", "Ask for chat"],
-    "notes": "Interested in ML Engineer position. Background in ML and agentic systems."
-  },
-  {
-    "id": "email_founder_startup",
-    "channel": "email",
-    "recipient_type": "founder",
-    "company": "Anthropic",
-    "target_role": "AI Research Engineer",
-    "tone": "professional",
-    "max_words": 120,
-    "allowed_facts": [
-      "MSCS at NYU",
-      "Research experience in ML/NLP",
-      "Built LangChain-based agentic workflows",
-      "Python expertise",
-      "Portfolio"
-    ],
-    "must_include": ["Portfolio", "NYU", "Ask for chat"],
-    "notes": "Interested in research engineering role. Strong interest in LLM systems and reliability."
-  },
-  {
-    "id": "linkedin_dm_recruiter_finance",
-    "channel": "linkedin_dm",
-    "recipient_type": "recruiter",
-    "company": "Goldman Sachs",
-    "target_role": "Quantitative Developer",
-    "tone": "professional",
-    "max_words": 80,
-    "allowed_facts": [
-      "MSCS at NYU",
-      "Python",
-      "Data Science",
-      "Backend engineering experience",
-      "GitHub"
-    ],
-    "must_include": ["GitHub", "NYU", "Ask for chat"],
-    "notes": "Interested in quantitative developer role. Strong Python and systems background."
-  },
-  {
-    "id": "email_hiring_manager_ai",
-    "channel": "email",
-    "recipient_type": "hiring_manager",
-    "company": "OpenAI",
-    "target_role": "Research Engineer",
-    "tone": "professional",
-    "max_words": 180,
-    "allowed_facts": [
-      "MSCS at NYU (GPA 4.0), expected May 2026",
-      "Experience in NLP and Machine Learning",
-      "Built telemetry and evaluation pipelines for LLM systems",
-      "Portfolio"
-    ],
-    "must_include": ["Portfolio", "NYU", "Ask for chat"],
-    "notes": "Interested in research engineering role focused on LLM systems and evaluation."
-  },
-  {
-    "id": "linkedin_dm_founder_ai",
-    "channel": "linkedin_dm",
-    "recipient_type": "founder",
-    "company": "Cohere",
-    "target_role": "ML Engineer",
-    "tone": "professional",
-    "max_words": 90,
-    "allowed_facts": [
-      "MSCS at NYU",
-      "Machine Learning experience",
-      "Python",
-      "Built agentic workflows",
-      "GitHub"
-    ],
-    "must_include": ["GitHub", "NYU", "Ask for chat"],
-    "notes": "Interested in ML engineering role. Focus on production-grade AI systems."
-  },
-  {
-    "id": "email_recruiter_consulting",
-    "channel": "email",
-    "recipient_type": "recruiter",
-    "company": "McKinsey",
-    "target_role": "Data Scientist",
-    "tone": "professional",
-    "max_words": 140,
-    "allowed_facts": [
-      "MSCS at NYU",
-      "Data Science",
-      "Python",
-      "Analytics",
-      "Portfolio"
-    ],
-    "must_include": ["Portfolio", "NYU", "Ask for chat"],
-    "notes": "Interested in data science role in consulting. Strong analytical background."
-  },
-  {
-    "id": "linkedin_dm_hiring_manager_tech",
-    "channel": "linkedin_dm",
-    "recipient_type": "hiring_manager",
-    "company": "Apple",
-    "target_role": "Software Engineer",
-    "tone": "professional",
-    "max_words": 110,
-    "allowed_facts": [
-      "MSCS at NYU",
-      "Software engineering background",
-      "Python",
-      "Backend APIs",
-      "GitHub"
-    ],
-    "must_include": ["GitHub", "NYU", "Ask for chat"],
-    "notes": "Interested in software engineering role. Strong backend and AI systems exposure."
-  }
-]
+  "evaluation_prompts": [
+    {
+      "id": "E1",
+      "channel": "email",
+      "recipient_type": "recruiter",
+      "company": "Google",
+      "target_role": "Software Engineer",
+      "tone": "professional",
+      "max_words": 150,
+      "must_include": ["mention_github", "mention_portfolio", "request_chat"],
+      "notes": "Interested in Software Engineer role. Background in software engineering and agentic workflows."
+    },
+    {
+      "id": "linkedin_dm_hiring_manager",
+      "channel": "linkedin_dm",
+      "recipient_type": "hiring_manager",
+      "company": "Meta",
+      "target_role": "ML Engineer",
+      "tone": "professional",
+      "max_words": 100,
+      "must_include": ["mention_portfolio", "request_chat"],
+      "notes": "Interested in ML Engineer position. Background in ML and agentic systems."
+    },
+    {
+      "id": "email_founder_startup",
+      "channel": "email",
+      "recipient_type": "founder",
+      "company": "Anthropic",
+      "target_role": "AI Research Engineer",
+      "tone": "professional",
+      "max_words": 120,
+      "must_include": ["mention_portfolio", "request_chat"],
+      "notes": "Interested in research engineering role. Strong interest in LLM systems and reliability."
+    },
+    {
+      "id": "linkedin_dm_recruiter_finance",
+      "channel": "linkedin_dm",
+      "recipient_type": "recruiter",
+      "company": "Goldman Sachs",
+      "target_role": "Quantitative Developer",
+      "tone": "professional",
+      "max_words": 80,
+      "must_include": ["mention_github", "request_chat"],
+      "notes": "Interested in quantitative developer role. Strong Python and systems background."
+    },
+    {
+      "id": "email_hiring_manager_ai",
+      "channel": "email",
+      "recipient_type": "hiring_manager",
+      "company": "OpenAI",
+      "target_role": "Research Engineer",
+      "tone": "professional",
+      "max_words": 180,
+      "must_include": ["mention_portfolio", "request_chat"],
+      "notes": "Interested in research engineering role focused on LLM systems and evaluation."
+    },
+    {
+      "id": "linkedin_dm_founder_ai",
+      "channel": "linkedin_dm",
+      "recipient_type": "founder",
+      "company": "Cohere",
+      "target_role": "ML Engineer",
+      "tone": "professional",
+      "max_words": 90,
+      "must_include": ["mention_github", "request_chat"],
+      "notes": "Interested in ML engineering role. Focus on production-grade AI systems."
+    },
+    {
+      "id": "email_recruiter_consulting",
+      "channel": "email",
+      "recipient_type": "recruiter",
+      "company": "McKinsey",
+      "target_role": "Data Scientist",
+      "tone": "professional",
+      "max_words": 140,
+      "must_include": ["mention_portfolio", "request_chat"],
+      "notes": "Interested in data science role in consulting. Strong analytical background."
+    },
+    {
+      "id": "linkedin_dm_hiring_manager_tech",
+      "channel": "linkedin_dm",
+      "recipient_type": "hiring_manager",
+      "company": "Apple",
+      "target_role": "Software Engineer",
+      "tone": "professional",
+      "max_words": 110,
+      "must_include": ["mention_github", "request_chat"],
+      "notes": "Interested in software engineering role. Strong backend and AI systems exposure."
+    }
+  ]
+}

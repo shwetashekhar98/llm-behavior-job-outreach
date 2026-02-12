@@ -1,5 +1,6 @@
 """
-Production-grade Job Outreach LLM Evaluator with professional dark theme.
+Production-grade Job Outreach LLM Evaluator - Generic, Reusable Framework
+Professional SaaS dashboard UI with dark theme.
 """
 
 import streamlit as st
@@ -21,113 +22,218 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for dark theme
+# Professional Dark Theme CSS
 st.markdown("""
 <style>
-    /* Dark Theme Colors */
+    /* Professional Dark Theme - SaaS Dashboard Style */
     .stApp {
-        background-color: #0E1117;
+        background-color: #0f172a;
+        color: #e2e8f0;
     }
     
+    /* Main content area */
+    .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+    
+    /* Metric Cards */
     .metric-card {
-        background-color: #161B22;
-        padding: 1.5rem;
-        border-radius: 8px;
-        border: 1px solid #30363D;
+        background: linear-gradient(135deg, #1e293b 0%, #1e293b 100%);
+        padding: 1.75rem;
+        border-radius: 12px;
+        border: 1px solid #334155;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        transition: all 0.3s ease;
         margin-bottom: 1rem;
+    }
+    
+    .metric-card:hover {
+        border-color: #38bdf8;
+        box-shadow: 0 8px 12px -2px rgba(56, 189, 248, 0.2);
     }
     
     .metric-value {
-        font-size: 2rem;
-        font-weight: bold;
-        color: #E5E7EB;
+        font-size: 2.5rem;
+        font-weight: 700;
+        line-height: 1.2;
+        margin-bottom: 0.5rem;
     }
     
     .metric-label {
-        font-size: 0.9rem;
-        color: #8B949E;
-        margin-top: 0.5rem;
+        font-size: 0.875rem;
+        color: #94a3b8;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
     
-    .success-badge {
-        background-color: #22C55E;
-        color: white;
-        padding: 0.25rem 0.75rem;
-        border-radius: 12px;
-        font-size: 0.85rem;
+    /* Badges */
+    .badge {
+        display: inline-block;
+        padding: 0.375rem 0.875rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
         font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
     
-    .fail-badge {
-        background-color: #EF4444;
+    .badge-success {
+        background-color: #22c55e;
         color: white;
-        padding: 0.25rem 0.75rem;
-        border-radius: 12px;
-        font-size: 0.85rem;
-        font-weight: 600;
     }
     
-    .warning-badge {
-        background-color: #F59E0B;
+    .badge-fail {
+        background-color: #ef4444;
         color: white;
-        padding: 0.25rem 0.75rem;
+    }
+    
+    .badge-warning {
+        background-color: #f59e0b;
+        color: white;
+    }
+    
+    .badge-info {
+        background-color: #38bdf8;
+        color: #0f172a;
+    }
+    
+    /* Result Panel */
+    .result-panel {
+        background: #1e293b;
+        border: 1px solid #334155;
         border-radius: 12px;
-        font-size: 0.85rem;
-        font-weight: 600;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        transition: all 0.3s ease;
+    }
+    
+    .result-panel:hover {
+        border-color: #475569;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+    }
+    
+    .result-panel.fabrication {
+        border-left: 4px solid #ef4444;
+    }
+    
+    .result-panel.overconfident {
+        border: 2px solid #ef4444;
+    }
+    
+    /* Check Indicators */
+    .check-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        font-weight: 500;
     }
     
     .check-pass {
-        color: #22C55E;
-        font-weight: 600;
+        background-color: rgba(34, 197, 94, 0.1);
+        color: #22c55e;
     }
     
     .check-fail {
-        color: #EF4444;
-        font-weight: 600;
+        background-color: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
     }
     
     .check-warning {
-        color: #F59E0B;
-        font-weight: 600;
+        background-color: rgba(245, 158, 11, 0.1);
+        color: #f59e0b;
     }
     
+    /* Confidence Bar */
+    .confidence-bar-container {
+        background-color: #334155;
+        border-radius: 8px;
+        height: 8px;
+        overflow: hidden;
+        margin-top: 0.5rem;
+    }
+    
+    .confidence-bar {
+        height: 100%;
+        border-radius: 8px;
+        transition: width 0.3s ease;
+    }
+    
+    .confidence-high {
+        background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
+    }
+    
+    .confidence-medium {
+        background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
+    }
+    
+    .confidence-low {
+        background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+    }
+    
+    /* Footer */
     .footer {
         text-align: center;
-        padding: 2rem;
-        color: #8B949E;
-        font-size: 0.85rem;
-        border-top: 1px solid #30363D;
-        margin-top: 3rem;
+        padding: 3rem 2rem;
+        color: #94a3b8;
+        font-size: 0.875rem;
+        border-top: 1px solid #334155;
+        margin-top: 4rem;
     }
     
-    .prompt-panel {
-        background-color: #161B22;
-        padding: 1rem;
+    /* Typography */
+    h1, h2, h3 {
+        color: #e2e8f0;
+    }
+    
+    /* Sidebar */
+    .css-1d391kg {
+        background-color: #1e293b;
+    }
+    
+    /* Button styling */
+    .stButton>button {
+        background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%);
+        color: white;
+        border: none;
         border-radius: 8px;
-        border: 1px solid #30363D;
-        margin-bottom: 1rem;
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
     }
     
-    .fabrication-highlight {
-        border-left: 4px solid #EF4444;
-        padding-left: 1rem;
-        background-color: #1C2128;
+    .stButton>button:hover {
+        background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+        box-shadow: 0 4px 12px rgba(56, 189, 248, 0.4);
     }
     
-    .overconfidence-highlight {
-        border: 2px solid #EF4444;
-        border-radius: 8px;
+    /* Toggle switch styling */
+    .stRadio>div>label {
+        color: #e2e8f0;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Title
-st.title("💼 Job Outreach LLM Evaluator")
-st.markdown("**Production-grade evaluation for AI-generated job application messages**")
+# Title Section
+st.markdown("""
+<div style="margin-bottom: 2rem;">
+    <h1 style="font-size: 2.5rem; font-weight: 700; color: #e2e8f0; margin-bottom: 0.5rem;">
+        💼 Job Outreach LLM Evaluator
+    </h1>
+    <p style="font-size: 1.125rem; color: #94a3b8; margin: 0;">
+        Production-grade reliability evaluation for AI-generated job application messages
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
-# Sidebar
+# Sidebar Configuration
 with st.sidebar:
-    st.header("⚙️ Configuration")
+    st.markdown("### ⚙️ Configuration")
+    st.markdown("---")
     
     # API Key
     default_key = ""
@@ -137,7 +243,12 @@ with st.sidebar:
     except:
         pass
     
-    api_key = st.text_input("Groq API Key", value=default_key, type="password", help="Get your key from console.groq.com")
+    api_key = st.text_input(
+        "Groq API Key",
+        value=default_key,
+        type="password",
+        help="Get your key from console.groq.com"
+    )
     
     model = st.selectbox(
         "Model",
@@ -146,18 +257,33 @@ with st.sidebar:
         help="Select the Groq model to evaluate"
     )
     
-    runs = st.slider("Runs per prompt", 2, 5, 3, help="Number of times to generate each message")
+    runs = st.slider(
+        "Runs per prompt",
+        2, 5, 3,
+        help="Number of times to generate each message"
+    )
     
-    # Evaluation Mode
+    st.markdown("---")
+    
+    # Evaluation Mode with toggle
+    st.markdown("**Evaluation Mode**")
     eval_mode = st.radio(
-        "Evaluation Mode",
+        "Mode",
         ["Relaxed", "Strict"],
         index=0,
-        help="Relaxed: Flexible matching. Strict: Exact phrase requirements."
+        help="Relaxed: Flexible matching. Strict: Exact phrase requirements.",
+        label_visibility="collapsed"
     )
     strict_mode = (eval_mode == "Strict")
     
-    st.divider()
+    st.markdown(f"""
+    <div style="background: #1e293b; padding: 0.75rem; border-radius: 8px; margin-top: 0.5rem;">
+        <span style="color: #38bdf8; font-weight: 600;">Current Mode:</span>
+        <span style="color: #e2e8f0; margin-left: 0.5rem;">{eval_mode}</span>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("---")
     
     if st.button("🚀 Run Evaluation", type="primary", use_container_width=True):
         st.session_state.run_evaluation = True
@@ -171,7 +297,16 @@ if not api_key:
 try:
     prompts_path = Path(__file__).parent / "src" / "prompts.json"
     with open(prompts_path, 'r') as f:
-        prompts = json.load(f)
+        prompts_data = json.load(f)
+        # Support both old and new format
+        if isinstance(prompts_data, list):
+            profile = {"allowed_facts": [], "links": {}}
+            prompts = prompts_data
+        else:
+            profile = prompts_data.get("profile", {"allowed_facts": [], "links": {}})
+            prompts = prompts_data.get("evaluation_prompts", [])
+        
+        profile_allowed_facts = profile.get("allowed_facts", [])
 except Exception as e:
     st.error(f"❌ Error loading prompts: {e}")
     st.stop()
@@ -194,13 +329,14 @@ def extract_confidence(text: str) -> float:
             return 0.5
     return 0.5
 
-def get_severity_color(check_passed: bool, is_critical: bool = False) -> str:
-    """Get color based on check result and severity."""
-    if is_critical:
-        return "#EF4444"  # Red
-    if check_passed:
-        return "#22C55E"  # Green
-    return "#F59E0B"  # Amber
+def get_confidence_color(confidence: float) -> str:
+    """Get color for confidence bar."""
+    if confidence >= 0.75:
+        return "confidence-high"
+    elif confidence >= 0.5:
+        return "confidence-medium"
+    else:
+        return "confidence-low"
 
 # Run evaluation
 if st.session_state.get("run_evaluation", False):
@@ -221,8 +357,10 @@ if st.session_state.get("run_evaluation", False):
         target_role = prompt_data["target_role"]
         tone = prompt_data["tone"]
         max_words = prompt_data["max_words"]
-        allowed_facts = prompt_data["allowed_facts"]
-        must_include = prompt_data["must_include"]
+        
+        # Use prompt-specific allowed_facts if provided, otherwise use profile
+        prompt_allowed_facts = prompt_data.get("allowed_facts", profile_allowed_facts)
+        must_include = prompt_data.get("must_include", [])
         notes = prompt_data["notes"]
         recipient_type = prompt_data["recipient_type"]
         
@@ -236,16 +374,16 @@ STRICT RULES:
 - Stay under max_words.
 - Maintain professional tone.
 - If must_include requires:
-    - GitHub → explicitly mention GitHub
-    - Portfolio → explicitly mention Portfolio
-    - Ask for chat → include a clear short request (e.g., "Would you be open to a 15-minute chat?")
+    - mention_github → explicitly mention GitHub
+    - mention_portfolio → explicitly mention Portfolio
+    - request_chat → include a clear short request (e.g., "Would you be open to a 15-minute chat?")
 
 Target: {recipient_type} at {company} for {target_role} role
 Channel: {channel}
 Tone: {tone}
 Maximum words: {max_words}
 Must include: {', '.join(must_include)}
-Allowed facts ONLY: {', '.join(allowed_facts)}
+Allowed facts ONLY: {', '.join(prompt_allowed_facts)}
 
 For email: Include a subject line. For LinkedIn DM: No subject line.
 
@@ -263,7 +401,7 @@ Recipient: {recipient_type}
 Requirements:
 - {tone} tone, max {max_words} words
 - Must include: {', '.join(must_include)}
-- Only use: {', '.join(allowed_facts)}"""
+- Only use: {', '.join(prompt_allowed_facts)}"""
         
         run_results = []
         for run_idx in range(runs):
@@ -281,7 +419,7 @@ Requirements:
                 message = response.choices[0].message.content or ""
                 confidence = extract_confidence(message)
                 check_results = run_checks(
-                    message, max_words, must_include, allowed_facts, tone, strict_mode,
+                    message, max_words, must_include, prompt_allowed_facts, tone, strict_mode,
                     company=company,
                     target_role=target_role,
                     recipient_type=recipient_type,
@@ -359,7 +497,8 @@ Requirements:
 if "evaluation_results" in st.session_state:
     all_results = st.session_state.evaluation_results
     
-    st.header("📊 Evaluation Results")
+    st.markdown("---")
+    st.markdown("## 📊 Evaluation Results")
     
     # Compute overall metrics
     total_prompts = len(all_results)
@@ -373,13 +512,15 @@ if "evaluation_results" in st.session_state:
     overconfident_count = sum(1 for r in all_results if r["overconfident"])
     overconfidence_rate = overconfident_count / total_prompts if total_prompts > 0 else 0.0
     
-    # Metrics Cards
+    # Metrics Cards - Professional Dashboard Style
+    st.markdown("### Summary Metrics")
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
+        pass_color = "#22c55e" if overall_pass_rate >= 0.8 else "#f59e0b" if overall_pass_rate >= 0.6 else "#ef4444"
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-value" style="color: {'#22C55E' if overall_pass_rate >= 0.8 else '#F59E0B' if overall_pass_rate >= 0.6 else '#EF4444'}">
+            <div class="metric-value" style="color: {pass_color}">
                 {overall_pass_rate:.1%}
             </div>
             <div class="metric-label">Pass Rate</div>
@@ -388,9 +529,10 @@ if "evaluation_results" in st.session_state:
         st.caption("Percentage of runs passing all checks")
     
     with col2:
+        fab_color = "#ef4444" if overall_fabrication_rate > 0 else "#22c55e"
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-value" style="color: {'#EF4444' if overall_fabrication_rate > 0 else '#22C55E'}">
+            <div class="metric-value" style="color: {fab_color}">
                 {overall_fabrication_rate:.1%}
             </div>
             <div class="metric-label">Fabrication Rate</div>
@@ -399,9 +541,10 @@ if "evaluation_results" in st.session_state:
         st.caption("Runs with fabricated facts")
     
     with col3:
+        overconf_color = "#ef4444" if overconfidence_rate > 0.2 else "#22c55e"
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-value" style="color: {'#EF4444' if overconfidence_rate > 0.2 else '#22C55E'}">
+            <div class="metric-value" style="color: {overconf_color}">
                 {overconfidence_rate:.1%}
             </div>
             <div class="metric-label">Overconfidence Rate</div>
@@ -410,9 +553,10 @@ if "evaluation_results" in st.session_state:
         st.caption("High confidence but failed checks")
     
     with col4:
+        stability_color = "#22c55e" if stability_rate >= 0.7 else "#f59e0b"
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-value" style="color: {'#22C55E' if stability_rate >= 0.7 else '#F59E0B'}">
+            <div class="metric-value" style="color: {stability_color}">
                 {stability_rate:.1%}
             </div>
             <div class="metric-label">Stability Rate</div>
@@ -420,25 +564,25 @@ if "evaluation_results" in st.session_state:
         """, unsafe_allow_html=True)
         st.caption("Consistent results across runs")
     
-    st.divider()
+    st.markdown("---")
     
     # Detailed Results
-    st.subheader("📋 Detailed Results by Prompt")
+    st.markdown("### Detailed Results by Prompt")
     
     for result in all_results:
         # Determine panel styling
-        panel_class = "prompt-panel"
+        panel_class = "result-panel"
         if result["overconfident"]:
-            panel_class += " overconfidence-highlight"
+            panel_class += " overconfident"
         if result["fabrication_rate"] > 0:
-            panel_class += " fabrication-highlight"
+            panel_class += " fabrication"
         
         with st.expander(
             f"**{result['id']}** - {result['company']} ({result['channel']}) | "
             f"Role: {result['role']} | Pass Rate: {result['pass_rate']:.1%}",
             expanded=False
         ):
-            # Prompt summary
+            # Prompt summary metrics
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric("Pass Rate", f"{result['pass_rate']:.1%}")
@@ -446,21 +590,31 @@ if "evaluation_results" in st.session_state:
                 st.metric("Fabrication", f"{result['fabrication_rate']:.1%}", 
                          delta=None if result['fabrication_rate'] == 0 else "⚠️")
             with col3:
-                st.metric("Stable", "✓" if result["stability"] else "✗")
+                badge = '<span class="badge badge-success">✓ Stable</span>' if result["stability"] else '<span class="badge badge-warning">✗ Unstable</span>'
+                st.markdown(badge, unsafe_allow_html=True)
             with col4:
-                st.metric("Overconfident", "⚠️" if result["overconfident"] else "✓")
+                badge = '<span class="badge badge-fail">⚠️ Overconfident</span>' if result["overconfident"] else '<span class="badge badge-success">✓ Confident</span>'
+                st.markdown(badge, unsafe_allow_html=True)
             
             st.divider()
             
             # Run details
             for run in result["runs"]:
                 # Run header with status
-                status_color = "#22C55E" if run["overall_pass"] else "#EF4444"
+                status_color = "#22c55e" if run["overall_pass"] else "#ef4444"
                 status_text = "✅ PASS" if run["overall_pass"] else "❌ FAIL"
                 
                 st.markdown(f"""
-                <div style="background-color: #161B22; padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">
+                <div style="background: #1e293b; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid {status_color};">
                     <h4 style="color: {status_color}; margin: 0;">Run {run['run']} - {status_text} | Confidence: {run['confidence']:.2f}</h4>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Confidence bar
+                conf_class = get_confidence_color(run["confidence"])
+                st.markdown(f"""
+                <div class="confidence-bar-container">
+                    <div class="confidence-bar {conf_class}" style="width: {run['confidence'] * 100}%"></div>
                 </div>
                 """, unsafe_allow_html=True)
                 
@@ -468,27 +622,27 @@ if "evaluation_results" in st.session_state:
                 col1, col2, col3, col4 = st.columns(4)
                 
                 with col1:
-                    word_color = get_severity_color(run["word_limit"])
+                    word_class = "check-pass" if run["word_limit"] else "check-fail"
                     word_icon = "✓" if run["word_limit"] else "✗"
-                    st.markdown(f'<span class="check-{"pass" if run["word_limit"] else "fail"}" style="color: {word_color};">{word_icon} Word Limit</span>', 
+                    st.markdown(f'<div class="check-indicator {word_class}">{word_icon} Word Limit</div>', 
                               unsafe_allow_html=True)
                 
                 with col2:
-                    include_color = get_severity_color(run["must_include"], is_critical=False)
+                    include_class = "check-pass" if run["must_include"] else "check-fail"
                     include_icon = "✓" if run["must_include"] else "✗"
-                    st.markdown(f'<span class="check-{"pass" if run["must_include"] else "fail"}" style="color: {include_color};">{include_icon} Must Include</span>', 
+                    st.markdown(f'<div class="check-indicator {include_class}">{include_icon} Must Include</div>', 
                               unsafe_allow_html=True)
                 
                 with col3:
-                    tone_color = get_severity_color(run["tone_ok"], is_critical=False)
+                    tone_class = "check-pass" if run["tone_ok"] else "check-fail"
                     tone_icon = "✓" if run["tone_ok"] else "✗"
-                    st.markdown(f'<span class="check-{"pass" if run["tone_ok"] else "fail"}" style="color: {tone_color};">{tone_icon} Tone</span>', 
+                    st.markdown(f'<div class="check-indicator {tone_class}">{tone_icon} Tone</div>', 
                               unsafe_allow_html=True)
                 
                 with col4:
-                    fact_color = get_severity_color(not run["fabrication"], is_critical=True)
+                    fact_class = "check-pass" if not run["fabrication"] else "check-fail"
                     fact_icon = "✓" if not run["fabrication"] else "✗"
-                    st.markdown(f'<span class="check-{"pass" if not run["fabrication"] else "fail"}" style="color: {fact_color};">{fact_icon} No Fabrication</span>', 
+                    st.markdown(f'<div class="check-indicator {fact_class}">{fact_icon} No Fabrication</div>', 
                               unsafe_allow_html=True)
                 
                 # Failure reasons
@@ -507,8 +661,8 @@ if "evaluation_results" in st.session_state:
                 st.divider()
     
     # Download section
-    st.divider()
-    st.subheader("📥 Download Results")
+    st.markdown("---")
+    st.markdown("### 📥 Download Results")
     
     # Prepare CSV data
     csv_rows = []
@@ -580,7 +734,11 @@ if "evaluation_results" in st.session_state:
 # Footer
 st.markdown("""
 <div class="footer">
-    <p>LLM Behavioral Evaluation for Job Outreach Automation</p>
-    <p style="font-size: 0.75rem; margin-top: 0.5rem;">Measures constraint compliance, fact accuracy, stability, and self-awareness</p>
+    <p style="font-size: 1rem; font-weight: 600; color: #e2e8f0; margin-bottom: 0.5rem;">
+        LLM Behavioral Evaluation for Job Outreach Automation
+    </p>
+    <p style="font-size: 0.875rem; color: #94a3b8;">
+        Measures constraint compliance, fact accuracy, stability, and self-awareness
+    </p>
 </div>
 """, unsafe_allow_html=True)

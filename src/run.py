@@ -49,10 +49,18 @@ def load_config() -> Dict[str, Any]:
     }
 
 
-def load_prompts(prompts_path: str) -> List[Dict[str, Any]]:
-    """Load prompts from JSON file."""
+def load_prompts(prompts_path: str) -> Dict[str, Any]:
+    """Load prompts from JSON file with new structure."""
     with open(prompts_path, 'r') as f:
-        return json.load(f)
+        data = json.load(f)
+        # Support both old format (list) and new format (dict with profile)
+        if isinstance(data, list):
+            # Old format - return as is with empty profile
+            return {
+                "profile": {"allowed_facts": [], "links": {}},
+                "evaluation_prompts": data
+            }
+        return data
 
 
 def generate_message(
@@ -405,7 +413,11 @@ def main():
     # Load prompts
     script_dir = Path(__file__).parent
     prompts_path = script_dir / "prompts.json"
-    prompts = load_prompts(str(prompts_path))
+    prompts_data = load_prompts(str(prompts_path))
+    
+    profile = prompts_data.get("profile", {})
+    profile_allowed_facts = profile.get("allowed_facts", [])
+    prompts = prompts_data.get("evaluation_prompts", [])
     
     print(f"Loaded {len(prompts)} prompts")
     print(f"Configuration: model={config['model']}, runs={config['runs_per_prompt']}, temp={config['temperature']}")
@@ -416,6 +428,18 @@ def main():
     for prompt_data in prompts:
         prompt_id = prompt_data["id"]
         print(f"Evaluating {prompt_id}...", end=" ", flush=True)
+        
+        # Merge profile allowed_facts with prompt-specific allowed_facts if any
+        prompt_allowed_facts = prompt_data.get("allowed_facts", [])
+        if prompt_allowed_facts:
+            # Prompt-specific facts override profile
+            combined_allowed_facts = prompt_allowed_facts
+        else:
+            # Use profile facts
+            combined_allowed_facts = profile_allowed_facts
+        
+        # Update prompt_data with combined facts
+        prompt_data["allowed_facts"] = combined_allowed_facts
         
         for run_idx in range(config["runs_per_prompt"]):
             result = generate_message(client, prompt_data, config, run_idx)

@@ -1,5 +1,6 @@
 """
-Enhanced validation checks for job outreach messages with STRICT and RELAXED modes.
+Generic validation checks for job outreach messages with STRICT and RELAXED modes.
+Production-grade, fully generic evaluation framework.
 """
 
 import re
@@ -16,11 +17,19 @@ def within_word_limit(text: str, max_words: int) -> bool:
 
 def must_include_all(text: str, must_include: List[str], strict_mode: bool = False) -> Tuple[bool, List[str]]:
     """
-    Check if text contains all required items.
+    Check if text contains all required items using abstract keys.
+    
+    Abstract keys:
+    - mention_github: Must mention GitHub
+    - mention_portfolio: Must mention Portfolio
+    - mention_linkedin: Must mention LinkedIn
+    - request_chat: Must request a chat/call/meeting
+    - mention_education: Must mention education
+    - mention_experience: Must mention experience
     
     Args:
         text: The message text
-        must_include: List of required items
+        must_include: List of abstract keys (e.g., ["mention_github", "request_chat"])
         strict_mode: If True, requires exact phrase match. If False, uses relaxed matching.
         
     Returns:
@@ -32,39 +41,60 @@ def must_include_all(text: str, must_include: List[str], strict_mode: bool = Fal
     text_lower = text.lower()
     missing = []
     
-    for item in must_include:
-        item_lower = item.lower()
+    for key in must_include:
+        key_lower = key.lower()
         
-        if strict_mode:
-            # STRICT: Exact phrase match
-            if item_lower == "ask for chat":
+        if key_lower == "mention_github":
+            if strict_mode:
+                if "github" not in text_lower:
+                    missing.append("mention_github")
+            else:
+                if "github" not in text_lower:
+                    missing.append("mention_github")
+        
+        elif key_lower == "mention_portfolio":
+            if strict_mode:
+                if "portfolio" not in text_lower:
+                    missing.append("mention_portfolio")
+            else:
+                if "portfolio" not in text_lower:
+                    missing.append("mention_portfolio")
+        
+        elif key_lower == "mention_linkedin":
+            if strict_mode:
+                if "linkedin" not in text_lower:
+                    missing.append("mention_linkedin")
+            else:
+                if "linkedin" not in text_lower:
+                    missing.append("mention_linkedin")
+        
+        elif key_lower == "request_chat":
+            if strict_mode:
                 # Must contain literal "chat"
                 if "chat" not in text_lower:
-                    missing.append(item)
+                    missing.append("request_chat")
             else:
-                # Exact match for GitHub, Portfolio, etc.
-                if item_lower not in text_lower:
-                    missing.append(item)
-        else:
-            # RELAXED: Case-insensitive contains with smart matching
-            if item_lower == "github":
-                if "github" not in text_lower:
-                    missing.append(item)
-            elif item_lower == "portfolio":
-                if "portfolio" not in text_lower:
-                    missing.append(item)
-            elif item_lower == "ask for chat":
                 # Accept: chat, call, connect, schedule, 15-minute, quick conversation
                 chat_phrases = ["chat", "call", "connect", "schedule", "15-minute", "quick conversation", "conversation"]
                 if not any(phrase in text_lower for phrase in chat_phrases):
-                    missing.append(item)
-            elif item_lower == "nyu":
-                if "nyu" not in text_lower:
-                    missing.append(item)
-            else:
-                # Generic contains check
-                if item_lower not in text_lower:
-                    missing.append(item)
+                    missing.append("request_chat")
+        
+        elif key_lower == "mention_education":
+            # Check for education-related keywords
+            education_keywords = ["education", "degree", "university", "college", "school", "graduate", "studied"]
+            if not any(keyword in text_lower for keyword in education_keywords):
+                missing.append("mention_education")
+        
+        elif key_lower == "mention_experience":
+            # Check for experience-related keywords
+            experience_keywords = ["experience", "worked", "intern", "internship", "role", "position", "job"]
+            if not any(keyword in text_lower for keyword in experience_keywords):
+                missing.append("mention_experience")
+        
+        else:
+            # Generic key - treat as literal string
+            if key_lower not in text_lower:
+                missing.append(key)
     
     return (len(missing) == 0, missing)
 
@@ -89,6 +119,7 @@ def tone_professional(text: str) -> Tuple[bool, List[str]]:
         issues.append("Contains emojis")
     
     # Check for slang using regex with word boundaries (case insensitive)
+    # Ensure "you" doesn't trigger "yo" - use word boundary
     slang_pattern = r'\b(yo|bro|asap|pls|thx|lol)\b'
     slang_match = re.search(slang_pattern, text_lower, re.IGNORECASE)
     if slang_match:
@@ -112,11 +143,9 @@ def detects_fabrication(
     channel: str = ""
 ) -> Tuple[bool, List[str]]:
     """
-    Detect if text mentions facts not in allowed_facts.
-    Automatically allows: company, target_role, recipient_type, channel.
-    Only flags: PhD/MBA/BA not in allowed, graduation year not in allowed, 
-    new employer not in allowed, publications if not allowed.
-    Does NOT flag MS, MSCS, Master's.
+    Generic fabrication detection using pattern matching.
+    Flags fabrication ONLY when message asserts employment/affiliation using specific patterns.
+    Does NOT flag target company, role mentions, or expressions of interest.
     
     Returns:
         Tuple of (bool, list of detected fabrications)
@@ -127,22 +156,12 @@ def detects_fabrication(
     text_lower = text.lower()
     allowed_lower = [fact.lower() for fact in allowed_facts]
     allowed_text = " ".join(allowed_lower)
-    
-    # Automatically allowed items (don't flag these)
-    auto_allowed = []
-    if company:
-        auto_allowed.append(company.lower())
-    if target_role:
-        auto_allowed.append(target_role.lower())
-    if recipient_type:
-        auto_allowed.append(recipient_type.lower())
-    if channel:
-        auto_allowed.append(channel.lower())
+    target_company_lower = company.lower() if company else ""
     
     fabrications = []
     
-    # Check for degrees NOT in allowed facts (only flag PhD, MBA, BA - NOT MS, MSCS, Master's)
-    # Use word boundaries to avoid substring matches
+    # 1. Degree detection - Flag PhD, MBA, BA, Bachelor ONLY if not in allowed_facts
+    # Do NOT flag MS / Master's generically
     phd_pattern = r'\b(ph\.?d\.?|doctorate)\b'
     mba_pattern = r'\b(m\.?b\.?a\.?)\b'
     ba_pattern = r'\b(b\.?a\.?|bachelor)\b'
@@ -159,32 +178,63 @@ def detects_fabrication(
         if not any("ba" in fact.lower() or "bachelor" in fact.lower() for fact in allowed_facts):
             fabrications.append("Fabricated degree: BA")
     
-    # Check for graduation years (4-digit years 1900-2099) not in allowed facts
-    years = re.findall(r'\b(19|20)\d{2}\b', text)
+    # 2. Year detection - Fix regex using non-capturing group
+    year_pattern = r'\b(?:19|20)\d{2}\b'
+    years = re.findall(year_pattern, text)
     for year in years:
-        if not any(year in fact.lower() for fact in allowed_facts):
+        if not any(year in fact for fact in allowed_facts):
             fabrications.append(f"Graduation year not allowed: {year}")
             break
     
-    # Check for employer/company names not in allowed facts (excluding target company)
-    # Common tech companies
-    common_companies = [
-        "microsoft", "amazon", "apple", "google", "meta", "facebook",
-        "netflix", "tesla", "uber", "airbnb", "stripe", "palantir",
-        "goldman", "mckinsey", "bain", "bcg", "deloitte", "pwc",
-        "gep worldwide", "gep", "anthropic", "openai", "cohere"
+    # 3. Employment/affiliation detection - Use pattern matching
+    # Flag ONLY when asserting employment/affiliation, NOT when expressing interest
+    # Use case-insensitive patterns
+    employment_patterns = [
+        (r'\b(worked at|worked for)\s+([A-Za-z][A-Za-z\s&]+?)(?:\s|,|\.|$)', 2),
+        (r'\b(at|for)\s+([A-Za-z][A-Za-z\s&]+?)\s+I\b', 2),
+        (r'\b(previously at|previously with)\s+([A-Za-z][A-Za-z\s&]+?)(?:\s|,|\.|$)', 2),
+        (r'\b(interned at|interned with)\s+([A-Za-z][A-Za-z\s&]+?)(?:\s|,|\.|$)', 2),
+        (r'\b(employed at|employed by)\s+([A-Za-z][A-Za-z\s&]+?)(?:\s|,|\.|$)', 2),
+        (r'\b(joined|served at)\s+([A-Za-z][A-Za-z\s&]+?)(?:\s|,|\.|$)', 2),
+        (r'\bas\s+(?:a|an)\s+[^,]+?\s+(?:at|with)\s+([A-Za-z][A-Za-z\s&]+?)(?:\s|,|\.|$)', 1),
     ]
-    target_company_lower = company.lower() if company else ""
-    for comp in common_companies:
-        # Skip if it's the target company (automatically allowed)
-        if comp == target_company_lower:
-            continue
-        if comp in text_lower:
-            if not any(comp in fact.lower() for fact in allowed_facts):
-                fabrications.append(f"New employer not allowed: {comp.title()}")
-                break
     
-    # Check for publications/awards not in allowed facts
+    # Extract company names from employment patterns
+    found_companies = set()
+    for pattern, group_num in employment_patterns:
+        matches = re.finditer(pattern, text_lower, re.IGNORECASE)
+        for match in matches:
+            if match.lastindex and match.lastindex >= group_num:
+                company_name = match.group(group_num)
+                if company_name:
+                    # Clean up company name
+                    company_name = company_name.strip()
+                    # Skip if it's too short or common words
+                    if len(company_name) >= 3:
+                        found_companies.add(company_name)
+    
+    # Check each found company
+    for found_company in found_companies:
+        found_company_lower = found_company.lower()
+        
+        # Skip target company
+        if found_company_lower == target_company_lower:
+            continue
+        
+        # Skip if it's in allowed facts
+        if any(found_company_lower in fact.lower() for fact in allowed_facts):
+            continue
+        
+        # Skip common words that aren't companies
+        skip_words = ["the", "a", "an", "this", "that", "my", "your", "our", "their"]
+        if found_company_lower in skip_words or len(found_company_lower) < 3:
+            continue
+        
+        # Flag as fabrication
+        fabrications.append(f"New employer not allowed: {found_company.title()}")
+        break  # Only flag first instance
+    
+    # 4. Publications/awards detection
     pub_indicators = ["published", "publication", "paper", "award", "prize", "honor"]
     for indicator in pub_indicators:
         if indicator in text_lower:
@@ -213,7 +263,7 @@ def run_checks(
     Args:
         text: The message text
         max_words: Maximum word limit
-        must_include: List of required items
+        must_include: List of abstract keys (e.g., ["mention_github", "request_chat"])
         allowed_facts: List of allowed facts
         tone: Expected tone (should be "professional")
         strict_mode: If True, uses strict evaluation mode
@@ -242,14 +292,18 @@ def run_checks(
         failure_reasons.append(f"Word limit exceeded: {word_count} > {max_words}")
     if not must_include_ok:
         for item in missing_items:
-            if item.lower() == "portfolio":
+            if item == "mention_portfolio":
                 failure_reasons.append("Missing Portfolio mention")
-            elif item.lower() == "github":
+            elif item == "mention_github":
                 failure_reasons.append("Missing GitHub mention")
-            elif item.lower() == "ask for chat":
+            elif item == "mention_linkedin":
+                failure_reasons.append("Missing LinkedIn mention")
+            elif item == "request_chat":
                 failure_reasons.append("Missing chat request")
-            elif item.lower() == "nyu":
-                failure_reasons.append("Missing NYU mention")
+            elif item == "mention_education":
+                failure_reasons.append("Missing education mention")
+            elif item == "mention_experience":
+                failure_reasons.append("Missing experience mention")
             else:
                 failure_reasons.append(f"Missing {item}")
     if not tone_ok:
