@@ -459,8 +459,8 @@ elif st.session_state.stage == "results":
         overall_metrics = compute_overall_metrics(results)
         
         # Summary Metrics
-        st.markdown("### Summary Metrics")
-        col1, col2, col3, col4 = st.columns(4)
+        st.markdown("### 📊 Summary Metrics")
+        col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
             render_metric_card(
@@ -478,12 +478,19 @@ elif st.session_state.stage == "results":
         
         with col3:
             render_metric_card(
+                "Unsupported Claims",
+                overall_metrics.get("unsupported_rate", 0),
+                "#ef4444" if overall_metrics.get("unsupported_rate", 0) > 0.1 else "#22c55e"
+            )
+        
+        with col4:
+            render_metric_card(
                 "Overconfidence Rate",
                 overall_metrics["overconfidence_rate"],
                 "#ef4444" if overall_metrics["overconfidence_rate"] > 0.2 else "#22c55e"
             )
         
-        with col4:
+        with col5:
             render_metric_card(
                 "Stability Rate",
                 overall_metrics["stability_rate"],
