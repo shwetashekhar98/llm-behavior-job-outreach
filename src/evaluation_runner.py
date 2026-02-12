@@ -177,6 +177,7 @@ def evaluate_scenario(
     overconfidence_rate = overconfident_count / len(results) if results else 0.0
     
     stability = len(set(r["overall_pass"] for r in results)) == 1
+    overconfident = overconfident_count > 0
     
     return {
         "scenario_id": scenario_id,
@@ -184,6 +185,7 @@ def evaluate_scenario(
         "pass_rate": pass_rate,
         "fabrication_rate": fabrication_rate,
         "overconfidence_rate": overconfidence_rate,
+        "overconfident": overconfident,
         "stability": stability,
         "runs": results
     }
