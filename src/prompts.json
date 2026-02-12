@@ -1,15 +1,15 @@
 [
   {
-    "id": "email_recruiter_tech",
+    "id": "E1",
     "channel": "email",
     "recipient_type": "recruiter",
     "company": "Google",
     "target_role": "Software Engineer",
     "tone": "professional",
     "max_words": 150,
-    "allowed_facts": ["NYU", "MS Computer Science", "2024", "Python", "Machine Learning", "GitHub"],
-    "must_include": ["NYU", "GitHub", "Ask for chat"],
-    "notes": "Recent grad from NYU, MS in CS, strong in Python and ML. Want to connect about software engineer role."
+    "allowed_facts": ["MSCS at NYU (GPA 4.0)", "4+ years software engineering experience", "Built agentic workflows with telemetry"],
+    "must_include": ["GitHub", "Portfolio", "Ask for chat"],
+    "notes": "Recent MSCS grad from NYU with 4+ years software engineering experience. Built agentic workflows with telemetry. Interested in Software Engineer role."
   },
   {
     "id": "linkedin_dm_hiring_manager",

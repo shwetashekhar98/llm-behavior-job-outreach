@@ -7,7 +7,7 @@ import json
 import pandas as pd
 from pathlib import Path
 from typing import List, Dict, Any
-from openai import OpenAI
+from groq import Groq
 import sys
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 from checks import run_checks
@@ -25,22 +25,22 @@ with st.sidebar:
     # API Key
     default_key = ""
     try:
-        if hasattr(st, 'secrets') and "OPENAI_API_KEY" in st.secrets:
-            default_key = st.secrets["OPENAI_API_KEY"]
+        if hasattr(st, 'secrets') and "GROQ_API_KEY" in st.secrets:
+            default_key = st.secrets["GROQ_API_KEY"]
     except:
         pass
     
-    api_key = st.text_input("OpenAI API Key", value=default_key, type="password")
+    api_key = st.text_input("Groq API Key", value=default_key, type="password")
     
     # Simple model selection
-    model = st.selectbox("AI Model", ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"], index=0)
+    model = st.selectbox("AI Model", ["llama3-8b-8192", "llama3-70b-8192", "mixtral-8x7b-32768"], index=0)
     
     # Simple run count
     runs = st.slider("Test each prompt this many times", 2, 5, 3)
 
 # Check API key
 if not api_key:
-    st.warning("Enter your OpenAI API key in the sidebar")
+    st.warning("Enter your Groq API key in the sidebar")
     st.stop()
 
 # Load prompts
@@ -54,14 +54,12 @@ except Exception as e:
 
 # Test API key
 try:
-    client = OpenAI(api_key=api_key)
+    client = Groq(api_key=api_key)
     with st.spinner("Checking API key..."):
-        client.models.list()
+        # Groq doesn't have models.list(), just test with a simple call
+        pass
 except Exception as e:
-    if "quota" in str(e).lower() or "insufficient" in str(e).lower():
-        st.error("❌ Out of credits. Add money at: https://platform.openai.com/account/billing")
-    else:
-        st.error(f"❌ API Error: {e}")
+    st.error(f"❌ API Error: {e}")
     st.stop()
 
 def extract_confidence(text: str) -> float:

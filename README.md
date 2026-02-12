@@ -1,6 +1,6 @@
 # LLM Behavior Job Outreach
 
-A simple Python project that measures LLM reliability for job application cold outreach messages.
+A simple Python project that measures LLM reliability for job application cold outreach messages using **Groq API** (Llama3 model).
 
 ## What "LLM Behavior" Means Here
 
@@ -45,16 +45,18 @@ llm-behavior-job-outreach/
    ```bash
    # Create .env file
    cat > .env << EOF
-   OPENAI_API_KEY=your_api_key_here
-   MODEL=gpt-4o-mini
+   GROQ_API_KEY=your_key_here
+   MODEL=llama3-8b-8192
    RUNS_PER_PROMPT=3
    TEMPERATURE=0.2
    EOF
    ```
-   Then edit `.env` and replace `your_api_key_here` with your actual OpenAI API key.
+   Then edit `.env` and replace `your_key_here` with your actual Groq API key.
+   
+   **Get Groq API Key:** https://console.groq.com/keys
 
 3. **Optional configuration** (in `.env`):
-   - `MODEL`: Model to test (default: `gpt-4o-mini`)
+   - `MODEL`: Model to test (default: `llama3-8b-8192`)
    - `RUNS_PER_PROMPT`: Number of runs per prompt (default: `3`)
    - `TEMPERATURE`: Sampling temperature (default: `0.2`)
 
@@ -149,13 +151,23 @@ Aggregated metrics:
 - `by_recipient_type`: Breakdown for recruiter vs hiring_manager vs founder
 - `by_prompt`: Per-prompt metrics
 
+## Why This Matters for LLM Reliability
+
+Job outreach is a critical use case where LLM failures have real consequences:
+- **Constraint violations** can make you look unprofessional
+- **Fabricated facts** can damage your credibility
+- **Inconsistent outputs** make it hard to choose the best message
+- **Overconfidence** means the model doesn't know when it's making mistakes
+
+This tool helps you measure these behaviors before using LLMs in production.
+
 ## Next Steps / Future Enhancements
 
-1. **Semantic Similarity**: Compare messages across runs to measure consistency
-2. **Human Labels**: Collect human judgments on message quality and effectiveness
-3. **A/B Templates**: Test different message templates and structures
-4. **Response Rate Tracking**: Track actual response rates from generated messages
-5. **Personalization Scoring**: Measure how well messages are personalized
+1. **Semantic Similarity**: Compare messages across runs to measure consistency using embeddings
+2. **RAG (Retrieval-Augmented Generation)**: Add fact-checking against a knowledge base
+3. **Human Labels**: Collect human judgments on message quality and effectiveness
+4. **A/B Templates**: Test different message templates and structures
+5. **Response Rate Tracking**: Track actual response rates from generated messages
 6. **Multi-Model Comparison**: Test multiple models side-by-side
 7. **Cost Tracking**: Monitor API costs per evaluation
 

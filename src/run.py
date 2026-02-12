@@ -9,7 +9,7 @@ import csv
 from pathlib import Path
 from typing import List, Dict, Any
 from dotenv import load_dotenv
-from openai import OpenAI
+from groq import Groq
 from checks import run_checks
 
 
@@ -42,8 +42,8 @@ def load_config() -> Dict[str, Any]:
     load_dotenv()
     
     return {
-        "api_key": os.getenv("OPENAI_API_KEY"),
-        "model": os.getenv("MODEL", "gpt-4o-mini"),
+        "api_key": os.getenv("GROQ_API_KEY"),
+        "model": os.getenv("MODEL", "llama3-8b-8192"),
         "runs_per_prompt": int(os.getenv("RUNS_PER_PROMPT", "3")),
         "temperature": float(os.getenv("TEMPERATURE", "0.2"))
     }
@@ -56,7 +56,7 @@ def load_prompts(prompts_path: str) -> List[Dict[str, Any]]:
 
 
 def generate_message(
-    client: OpenAI,
+    client: Groq,
     prompt_data: Dict[str, Any],
     config: Dict[str, Any],
     run_idx: int
@@ -350,12 +350,12 @@ def main():
     # Load config
     config = load_config()
     if not config["api_key"]:
-        print("Error: OPENAI_API_KEY not found in environment variables.")
+        print("Error: GROQ_API_KEY not found in environment variables.")
         print("Please set it in your .env file or environment.")
         return
     
     # Initialize client
-    client = OpenAI(api_key=config["api_key"])
+    client = Groq(api_key=config["api_key"])
     
     # Load prompts
     script_dir = Path(__file__).parent
