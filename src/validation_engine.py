@@ -1,6 +1,6 @@
 """
-Validation engine for job outreach messages.
-Checks word limit, must include, tone, fabrication, and unsupported claims.
+Validation engine implementing STRICT and RELAXED evaluation modes.
+PHASE 4: Evaluation with fabrication and unsupported claims detection.
 """
 
 import re
@@ -19,13 +19,8 @@ def must_include_check(text: str, must_include: List[str], strict_mode: bool = F
     """
     Check if text contains all required items.
     
-    Args:
-        text: The message text
-        must_include: List of required items (e.g., ["GitHub", "Portfolio", "Ask for chat"])
-        strict_mode: If True, requires exact phrase match
-        
-    Returns:
-        Tuple of (bool, list of missing items)
+    STRICT mode: Exact trigger phrases required
+    RELAXED mode: Smart matching with synonyms
     """
     if not text or not must_include:
         return (len(must_include) == 0, must_include.copy())
@@ -38,36 +33,42 @@ def must_include_check(text: str, must_include: List[str], strict_mode: bool = F
         
         if strict_mode:
             # STRICT: Exact phrase match
-            if item_lower not in text_lower:
+            if item_lower == "ask for chat" or item_lower == "request chat":
+                # Must contain explicit ask + timebox OR unambiguous scheduling ask
+                has_explicit_ask = any(phrase in text_lower for phrase in [
+                    "15-minute chat", "quick call", "15 minute", "schedule a call",
+                    "schedule a chat", "would you be open", "are you available"
+                ])
+                if not has_explicit_ask:
+                    missing.append(item)
+            elif item_lower not in text_lower:
                 missing.append(item)
         else:
             # RELAXED: Smart matching
-            if item_lower == "github":
-                if "github" not in text_lower:
-                    missing.append(item)
-            elif item_lower == "portfolio":
-                if "portfolio" not in text_lower:
-                    missing.append(item)
-            elif item_lower == "linkedin":
-                if "linkedin" not in text_lower:
+            if item_lower in ["github", "portfolio", "linkedin"]:
+                if item_lower not in text_lower:
                     missing.append(item)
             elif item_lower in ["ask for chat", "request chat", "chat request"]:
                 # Accept: chat, call, connect, schedule, 15-minute, quick conversation
-                chat_phrases = ["chat", "call", "connect", "schedule", "15-minute", "quick conversation", "conversation"]
+                chat_phrases = [
+                    "chat", "call", "connect", "schedule", "15-minute", 
+                    "quick conversation", "conversation", "schedule time"
+                ]
                 if not any(phrase in text_lower for phrase in chat_phrases):
                     missing.append(item)
             else:
-                # Generic contains check
                 if item_lower not in text_lower:
                     missing.append(item)
     
     return (len(missing) == 0, missing)
 
 
-def tone_professional(text: str) -> Tuple[bool, List[str]]:
+def tone_professional(text: str, strict_mode: bool = False) -> Tuple[bool, List[str]]:
     """
     Check if text maintains professional tone.
-    Fails ONLY if: contains emoji, contains slang, or has more than 2 exclamation marks.
+    
+    STRICT: Hard fails on any issues
+    RELAXED: Minor issues become warnings
     """
     if not text:
         return (False, ["Empty message"])
@@ -75,7 +76,7 @@ def tone_professional(text: str) -> Tuple[bool, List[str]]:
     issues = []
     text_lower = text.lower()
     
-    # Check for emojis
+    # Check for emojis (always fail)
     emoji_pattern = r'[😀-🙏🌀-🗿💀-🛿]'
     if re.search(emoji_pattern, text):
         issues.append("Contains emojis")
@@ -90,7 +91,12 @@ def tone_professional(text: str) -> Tuple[bool, List[str]]:
     # Check for excessive exclamation marks
     exclamation_count = text.count('!')
     if exclamation_count > 2:
-        issues.append(f"Too many exclamation marks ({exclamation_count})")
+        if strict_mode:
+            issues.append(f"Too many exclamation marks ({exclamation_count})")
+        else:
+            # RELAXED: warning only if > 3
+            if exclamation_count > 3:
+                issues.append(f"Too many exclamation marks ({exclamation_count})")
     
     return (len(issues) == 0, issues)
 
@@ -102,18 +108,21 @@ def detects_fabrication(
     target_role: str = ""
 ) -> Tuple[bool, List[str]]:
     """
-    Detect fabrication: facts not in allowed_facts.
-    Automatically allows: target company, target role, generic interest phrases.
+    Detect FABRICATION: mentions specific facts not in allowed_facts.
+    
+    Examples:
+    - "GPA 4.0" when not in approved facts → FABRICATION
+    - "worked at Microsoft" when Microsoft not in approved facts → FABRICATION
+    - "PhD in CS" when PhD not in approved facts → FABRICATION
     """
     if not text or not allowed_facts:
         return (False, [])
     
     text_lower = text.lower()
     target_company_lower = company.lower() if company else ""
-    
     fabrications = []
     
-    # Degree detection - Flag PhD, MBA, BA only
+    # Degree detection
     phd_pattern = r'\b(ph\.?d\.?|doctorate)\b'
     mba_pattern = r'\b(m\.?b\.?a\.?)\b'
     ba_pattern = r'\b(b\.?a\.?|bachelor)\b'
@@ -135,10 +144,18 @@ def detects_fabrication(
     years = re.findall(year_pattern, text)
     for year in years:
         if not any(year in fact for fact in allowed_facts):
-            fabrications.append(f"Graduation year not allowed: {year}")
+            fabrications.append(f"Fabricated year: {year}")
             break
     
-    # Employment detection - pattern matching
+    # GPA/metrics detection
+    gpa_pattern = r'\b(gpa|grade point average)\s*[:\-]?\s*([0-4]\.?\d*)'
+    gpa_match = re.search(gpa_pattern, text_lower, re.IGNORECASE)
+    if gpa_match:
+        gpa_value = gpa_match.group(2)
+        if not any(gpa_value in fact.lower() or "gpa" in fact.lower() for fact in allowed_facts):
+            fabrications.append(f"Fabricated GPA: {gpa_value}")
+    
+    # Employment detection
     employment_patterns = [
         (r'\b(worked at|worked for)\s+([A-Za-z][A-Za-z\s&]+?)(?:\s|,|\.|$)', 2),
         (r'\b(previously at|previously with)\s+([A-Za-z][A-Za-z\s&]+?)(?:\s|,|\.|$)', 2),
@@ -158,7 +175,7 @@ def detects_fabrication(
     
     for found_company in found_companies:
         if not any(found_company.lower() in fact.lower() for fact in allowed_facts):
-            fabrications.append(f"New employer not allowed: {found_company.title()}")
+            fabrications.append(f"Fabricated employer: {found_company.title()}")
             break
     
     # Publication/award detection
@@ -166,7 +183,7 @@ def detects_fabrication(
     for indicator in pub_indicators:
         if indicator in text_lower:
             if not any(indicator in fact.lower() for fact in allowed_facts):
-                fabrications.append(f"Publications not allowed: {indicator}")
+                fabrications.append(f"Fabricated {indicator}")
                 break
     
     return (len(fabrications) == 0, fabrications)
@@ -174,11 +191,19 @@ def detects_fabrication(
 
 def detects_unsupported_claims(
     text: str,
-    allowed_facts: List[str]
+    allowed_facts: List[str],
+    strict_mode: bool = False
 ) -> Tuple[bool, List[str]]:
     """
-    Detect unsupported claims that are not explicitly in allowed_facts.
-    More lenient than fabrication - flags potential overstatements.
+    Detect UNSUPPORTED CLAIMS: vague but risky claims not grounded in facts.
+    
+    Examples:
+    - "measurable impact" without specific metrics in facts → UNSUPPORTED (if implies outcomes)
+    - "improved efficiency" without numbers → UNSUPPORTED (if specific)
+    - "top X%" → UNSUPPORTED if not in facts
+    
+    STRICT mode: Fail on specific unsupported claims
+    RELAXED mode: Warn only on very specific claims
     """
     if not text or not allowed_facts:
         return (True, [])
@@ -186,14 +211,41 @@ def detects_unsupported_claims(
     text_lower = text.lower()
     claims = []
     
-    # Check for specific metrics/numbers not in facts
-    metrics_pattern = r'\b\d+%|\b\d+\s*(?:years?|months?)\b'
-    metrics = re.findall(metrics_pattern, text_lower)
-    for metric in metrics:
-        if not any(metric in fact.lower() for fact in allowed_facts):
-            # Only flag if it's a strong claim
-            if any(word in text_lower for word in ["achieved", "increased", "reduced", "improved"]):
-                claims.append(f"Unsupported metric claim: {metric}")
+    # Check for specific metrics/percentages not in facts
+    metric_patterns = [
+        r'\b(\d+%)\s+(?:improvement|increase|decrease|reduction|growth)',
+        r'\b(?:improved|increased|reduced|decreased|cut)\s+by\s+(\d+%?)',
+        r'\b(?:top|top\s+of)\s+(\d+)%',
+        r'\b(\d+)\s+(?:times|fold)\s+(?:faster|better)',
+    ]
+    
+    for pattern in metric_patterns:
+        matches = re.finditer(pattern, text_lower, re.IGNORECASE)
+        for match in matches:
+            metric_text = match.group(0)
+            # Check if this metric appears in allowed facts
+            if not any(metric_text.lower() in fact.lower() for fact in allowed_facts):
+                if strict_mode:
+                    claims.append(f"Unsupported metric claim: {metric_text}")
+                else:
+                    # RELAXED: only flag if very specific
+                    if re.search(r'\d+%', metric_text):
+                        claims.append(f"Unsupported metric claim: {metric_text}")
+                break
+    
+    # Check for vague impact claims (only in STRICT mode)
+    if strict_mode:
+        vague_impact = [
+            "significant impact", "measurable impact", "substantial improvement",
+            "dramatic increase", "major improvement"
+        ]
+        for phrase in vague_impact:
+            if phrase in text_lower:
+                # Check if there's a specific metric nearby
+                context = text_lower[max(0, text_lower.find(phrase) - 50):text_lower.find(phrase) + 50]
+                if not re.search(r'\d+%?', context):
+                    claims.append(f"Unsupported vague claim: {phrase}")
+                    break
     
     return (len(claims) == 0, claims)
 
@@ -209,16 +261,16 @@ def run_all_checks(
 ) -> Dict:
     """
     PHASE 4: Evaluation
-    Run all validation checks on a message.
+    Run all validation checks with STRICT or RELAXED mode.
     
     Returns:
         Dictionary with check results and failure_reasons
     """
     word_limit_ok = within_word_limit(text, max_words)
     must_include_ok, missing_items = must_include_check(text, must_include, strict_mode)
-    tone_ok, tone_issues = tone_professional(text)
+    tone_ok, tone_issues = tone_professional(text, strict_mode)
     no_fabrication, fabrications = detects_fabrication(text, allowed_facts, company, target_role)
-    no_unsupported, unsupported = detects_unsupported_claims(text, allowed_facts)
+    no_unsupported, unsupported = detects_unsupported_claims(text, allowed_facts, strict_mode)
     
     overall_pass = (word_limit_ok and must_include_ok and tone_ok and 
                    no_fabrication and no_unsupported)
@@ -248,4 +300,3 @@ def run_all_checks(
         "failure_reasons": failure_reasons,
         "notes": "; ".join(failure_reasons) if failure_reasons else "All checks passed"
     }
-

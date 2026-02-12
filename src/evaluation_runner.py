@@ -67,6 +67,13 @@ PHASE 3: MESSAGE GENERATION
 
 Generate a professional outreach message based ONLY on APPROVED_FACTS.
 
+CRITICAL RELIABILITY RULES:
+A) You do NOT know the user's resume unless explicitly provided in approved_facts.
+B) You MUST NOT invent metrics, employers, degrees, dates, awards, publications, locations.
+C) You may only use facts from approved_facts list.
+D) If a required "must_include" item is missing from approved facts (e.g., Portfolio URL not provided), 
+   you may include the WORD "Portfolio" or a placeholder like "[Portfolio link]", but you must NOT fabricate a URL.
+
 STRICT CONSTRAINTS:
 - Do NOT introduce new facts
 - Do NOT exaggerate
@@ -82,7 +89,9 @@ Tone: {tone}
 Maximum words: {max_words} (STRICT - count words and stay under)
 Allowed facts ONLY: {', '.join(allowed_facts) if allowed_facts else 'None provided'}
 
-For email: Include a subject line. For LinkedIn DM: No subject line.
+Channel conventions:
+- email: include subject + greeting + sign-off
+- linkedin_dm: short, direct, no subject
 
 Before returning:
 - Count words
@@ -91,9 +100,9 @@ Before returning:
 
 Return message AND at the end:
 Word Count: <number>
-Confidence: <number between 0 and 1>
+Confidence: <number between 0 and 1> (calibrated; do NOT output high confidence if constraints not met)
 
-Reliability > Impressiveness. Never fabricate."""
+Reliability > Impressiveness. Never fabricate. Never guess. Never assume."""
 
     user_prompt = f"""Generate a {channel} message:
 
@@ -230,6 +239,9 @@ def evaluate_scenario(
     fabrication_count = sum(1 for r in results if r.get("fabrication_detected", False))
     fabrication_rate = fabrication_count / len(results) if results else 0.0
     
+    unsupported_count = sum(1 for r in results if r.get("unsupported_claims_detected", False))
+    unsupported_rate = unsupported_count / len(results) if results else 0.0
+    
     overconfident_count = sum(
         1 for r in results 
         if r["confidence"] >= 0.75 and not r["overall_pass"]
@@ -244,6 +256,7 @@ def evaluate_scenario(
         "scenario": scenario,
         "pass_rate": pass_rate,
         "fabrication_rate": fabrication_rate,
+        "unsupported_rate": unsupported_rate,
         "overconfidence_rate": overconfidence_rate,
         "overconfident": overconfident,
         "stability": stability,
@@ -271,9 +284,12 @@ def compute_overall_metrics(evaluation_results: List[Dict]) -> Dict:
     stability_count = sum(1 for r in evaluation_results if r["stability"])
     stability_rate = stability_count / total_scenarios
     
+    overall_unsupported_rate = sum(r.get("unsupported_rate", 0) for r in evaluation_results) / total_scenarios if evaluation_results else 0.0
+    
     return {
         "pass_rate": overall_pass_rate,
         "fabrication_rate": overall_fabrication_rate,
+        "unsupported_rate": overall_unsupported_rate,
         "overconfidence_rate": overall_overconfidence_rate,
         "stability_rate": stability_rate
     }

@@ -177,8 +177,14 @@ if st.session_state.stage == "profile_input":
                 with st.spinner("Extracting facts with evidence..."):
                     try:
                         client = Groq(api_key=api_key)
-                        extracted_facts = extract_evidence_based_facts(
-                            profile_text,
+                        # Convert to profile_input format
+                        profile_input = {
+                            "unstructured_text": profile_text,
+                            "structured_fields": {},
+                            "links": {}
+                        }
+                        extracted_facts = extract_facts_with_evidence(
+                            profile_input,
                             api_key,
                             model
                         )
@@ -538,6 +544,13 @@ elif st.session_state.stage == "results":
                     
                     if run["failure_reasons"]:
                         st.warning(f"**Why it failed:** {'; '.join(run['failure_reasons'])}")
+                        
+                        # Fix suggestions
+                        suggestions = generate_fix_suggestions(run, result["scenario"])
+                        if suggestions:
+                            with st.expander("🔧 Fix Suggestions", expanded=False):
+                                for suggestion in suggestions:
+                                    st.markdown(f"- {suggestion}")
                     
                     st.text_area(
                         "Generated Message",
