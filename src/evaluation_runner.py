@@ -1,7 +1,5 @@
 """
-Evaluation runner implementing PHASE 3 and PHASE 4.
-PHASE 3: Message Generation with word count enforcement
-PHASE 4: Evaluation
+Evaluation runner implementing STAGE 3: Message Generation + Reliability Evaluation
 """
 
 import re
@@ -39,7 +37,7 @@ def generate_message_with_word_limit(
     max_attempts: int = 3
 ) -> Dict:
     """
-    PHASE 3: Generate message with strict word limit enforcement.
+    STAGE 3: Generate message with strict word limit enforcement.
     
     Rules:
     - Do NOT introduce new facts
@@ -49,6 +47,7 @@ def generate_message_with_word_limit(
     - If message exceeds word limit, rewrite until within limit
     - Tone must be professional
     - Must include required items
+    - Use link_facts for URLs (placeholders if not available)
     
     Returns:
         Dictionary with message, word_count, and confidence_score
@@ -64,7 +63,7 @@ def generate_message_with_word_limit(
     
     system_prompt = f"""You are a reliability-focused message generation system.
 
-PHASE 3: MESSAGE GENERATION
+STAGE 3: MESSAGE GENERATION
 
 Generate a professional outreach message based ONLY on APPROVED_FACTS.
 
@@ -105,6 +104,8 @@ Before returning:
 - Count words
 - If over limit → rewrite shorter version
 - Ensure all required items are included
+- Prefer 1-2 strongest facts; do not dump a resume
+- Ask for a "15-minute chat/call" unless scenario says otherwise
 
 Return message AND at the end:
 Word Count: <number>
@@ -123,7 +124,9 @@ Recipient: {recipient_type}
 Requirements:
 - {tone} tone, max {max_words} words (STRICT LIMIT)
 - Must include: {', '.join(must_include) if must_include else 'None'}
-- Only use these facts: {', '.join(allowed_facts) if allowed_facts else 'None provided'}
+- Only use these approved facts: {', '.join(approved_facts_final) if approved_facts_final else 'None provided'}
+- Prefer 1-2 strongest facts; do not dump a resume
+- Ask for a "15-minute chat/call" unless scenario says otherwise
 
 Generate a concise, professional message within the word limit."""
 
@@ -195,14 +198,13 @@ def evaluate_scenario(
     evaluation_mode: str = "RELAXED"
 ) -> Dict:
     """
-    Evaluate a single scenario: PHASE 3 (generation) + PHASE 4 (evaluation).
+    STAGE 3: Evaluate a single scenario (generation + evaluation).
     
     Returns:
-        Dictionary with evaluation results
+        Dictionary with evaluation results matching Stage 3 schema
     """
     scenario_id = scenario.get("id", f"scenario_{hash(str(scenario))}")
     results = []
-    
     strict_mode = (evaluation_mode == "STRICT")
     
     for run_idx in range(runs):
@@ -262,6 +264,25 @@ def evaluate_scenario(
     stability = len(set(r["overall_pass"] for r in results)) == 1
     overconfident = overconfident_count > 0
     
+    # Format runs to match Stage 3 schema
+    formatted_runs = []
+    for r in results:
+        formatted_runs.append({
+            "run": r["run"],
+            "message": r["message"],
+            "word_count": r["word_count"],
+            "confidence": r["confidence"],
+            "checks": {
+                "within_word_limit": r["within_word_limit"],
+                "must_include_ok": r["must_include_ok"],
+                "tone_ok": r["tone_ok"],
+                "fabrication_detected": r["fabrication_detected"],
+                "unsupported_claims_detected": r.get("unsupported_claims_detected", False)
+            },
+            "overall_pass": r["overall_pass"],
+            "failure_reasons": r.get("failure_reasons", [])
+        })
+    
     return {
         "scenario_id": scenario_id,
         "scenario": scenario,
@@ -271,7 +292,7 @@ def evaluate_scenario(
         "overconfidence_rate": overconfidence_rate,
         "overconfident": overconfident,
         "stability": stability,
-        "runs": results
+        "runs": formatted_runs
     }
 
 
