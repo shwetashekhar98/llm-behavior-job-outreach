@@ -559,20 +559,31 @@ elif st.session_state.stage == "results":
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    render_confidence_bar(run["confidence"])
+                    render_confidence_bar(run.get("confidence", 0.0))
                     
-                    # Checklist
+                    # Checklist - Access checks object if available, otherwise use flat structure
+                    checks = run.get("checks", {})
+                    if not checks:
+                        # Fallback to flat structure for backward compatibility
+                        checks = {
+                            "within_word_limit": run.get("within_word_limit", False),
+                            "must_include_ok": run.get("must_include_ok", False),
+                            "tone_ok": run.get("tone_ok", False),
+                            "fabrication_detected": run.get("fabrication_detected", False),
+                            "unsupported_claims_detected": run.get("unsupported_claims_detected", False)
+                        }
+                    
                     col1, col2, col3, col4, col5 = st.columns(5)
                     with col1:
-                        render_check_indicator(run["within_word_limit"], "Word Limit")
+                        render_check_indicator(checks.get("within_word_limit", False), "Word Limit")
                     with col2:
-                        render_check_indicator(run["must_include_ok"], "Must Include")
+                        render_check_indicator(checks.get("must_include_ok", False), "Must Include")
                     with col3:
-                        render_check_indicator(run["tone_ok"], "Tone")
+                        render_check_indicator(checks.get("tone_ok", False), "Tone")
                     with col4:
-                        render_check_indicator(not run["fabrication_detected"], "No Fabrication")
+                        render_check_indicator(not checks.get("fabrication_detected", False), "No Fabrication")
                     with col5:
-                        render_check_indicator(not run.get("unsupported_claims_detected", False), "No Unsupported")
+                        render_check_indicator(not checks.get("unsupported_claims_detected", False), "No Unsupported")
                     
                     if run["failure_reasons"]:
                         st.warning(f"**Why it failed:** {'; '.join(run['failure_reasons'])}")
