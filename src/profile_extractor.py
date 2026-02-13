@@ -274,12 +274,9 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
         warnings.extend(raw_warnings)
         
         # ============================================================================
-        # DEBUG: Show raw LLM output (before filtering)
+        # DEBUG: Store raw LLM output for UI display (don't display here - UI will handle it)
         # ============================================================================
-        if show_debug:
-            import streamlit as st
-            st.subheader("Stage 1 Raw LLM Output")
-            st.json({"candidate_facts": raw_candidate_facts, "warnings": raw_warnings})
+        # Raw output will be shown in UI after extraction completes
         
         # ============================================================================
         # DEBUG LOGGING: Store raw LLM response for file logging (if env var set)
@@ -394,15 +391,9 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
                 debug_info["accepted_facts"].append(accepted_item)
         
         # ============================================================================
-        # DEBUG: Show accepted and rejected facts in UI
+        # DEBUG: Store accepted and rejected for UI display (UI will handle display)
         # ============================================================================
-        if show_debug:
-            import streamlit as st
-            st.subheader("Stage 1 Accepted Facts")
-            st.json(accepted)
-            
-            st.subheader("Stage 1 Rejected Facts + Reasons")
-            st.json(rejected)
+        # Debug info will be returned and displayed in UI after extraction completes
         
         # ============================================================================
         # DEBUG LOGGING: Dump rejected and accepted facts to files (if env var set)
@@ -463,9 +454,14 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
             "warnings": warnings
         }
         
-        # Add debug info if requested
+        # Add debug info if requested (for UI display)
         if show_debug:
-            result["debug_info"] = debug_info
+            result["debug_info"] = {
+                "raw_candidate_facts": raw_candidate_facts,
+                "raw_warnings": raw_warnings,
+                "accepted_facts": accepted,
+                "rejected_facts": rejected
+            }
         
         return result
     
@@ -599,8 +595,7 @@ def extract_facts_with_evidence(
             "evidence_source": "extracted"
         })
     
-    # Store debug info in a way UI can access it
-    # We'll use a dict wrapper that the UI can check
+    # Return debug info if requested (for UI display)
     if show_debug and "debug_info" in stage1_result:
         # Return tuple: (facts_list, debug_info_dict)
         return (facts_for_ui, stage1_result["debug_info"])
