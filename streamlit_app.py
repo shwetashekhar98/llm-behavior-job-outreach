@@ -296,72 +296,72 @@ if st.session_state.stage == "profile_input":
                             "links": links_dict
                         }
                         result = extract_facts_with_evidence(
-                                profile_input,
-                                api_key,
-                                model,
-                                show_debug_stage1
-                            )
-                            
-                            # Extract debug info if available (returns tuple if debug enabled)
-                            debug_info = None
-                            if show_debug_stage1 and isinstance(result, tuple) and len(result) == 2:
-                                extracted_facts, debug_info = result
+                            profile_input,
+                            api_key,
+                            model,
+                            show_debug_stage1
+                        )
+                        
+                        # Extract debug info if available (returns tuple if debug enabled)
+                        debug_info = None
+                        if show_debug_stage1 and isinstance(result, tuple) and len(result) == 2:
+                            extracted_facts, debug_info = result
+                        else:
+                            extracted_facts = result
+                        
+                        # Debug: Log what we're storing
+                        if show_debug_stage1:
+                            st.write(f"🔍 **Debug: extract_facts_with_evidence returned {len(extracted_facts) if extracted_facts else 0} facts**")
+                            st.write(f"🔍 **Debug: Type of result: {type(result)}**")
+                            if isinstance(result, tuple):
+                                st.write(f"🔍 **Debug: Tuple length: {len(result)}**")
+                            if extracted_facts:
+                                st.write(f"🔍 **Debug: First fact: {extracted_facts[0].get('value', 'N/A')[:50]}...**")
+                                st.write(f"🔍 **Debug: First fact keys: {list(extracted_facts[0].keys())}**")
                             else:
-                                extracted_facts = result
-                            
-                            # Debug: Log what we're storing
-                            if show_debug_stage1:
-                                st.write(f"🔍 **Debug: extract_facts_with_evidence returned {len(extracted_facts) if extracted_facts else 0} facts**")
-                                st.write(f"🔍 **Debug: Type of result: {type(result)}**")
-                                if isinstance(result, tuple):
-                                    st.write(f"🔍 **Debug: Tuple length: {len(result)}**")
-                                if extracted_facts:
-                                    st.write(f"🔍 **Debug: First fact: {extracted_facts[0].get('value', 'N/A')[:50]}...**")
-                                    st.write(f"🔍 **Debug: First fact keys: {list(extracted_facts[0].keys())}**")
-                                else:
-                                    st.error(f"⚠️ **Debug: extracted_facts is empty or None!**")
-                                    if debug_info:
-                                        st.json({
-                                            "debug_info_keys": list(debug_info.keys()),
-                                            "accepted_facts_count": len(debug_info.get("accepted_facts", [])),
-                                            "rejected_facts_count": len(debug_info.get("rejected_facts", [])),
-                                            "raw_candidate_facts_count": len(debug_info.get("raw_candidate_facts", [])),
-                                            "num_llm_candidate_facts": debug_info.get("num_llm_candidate_facts", 0),
-                                            "num_deterministic_link_facts": debug_info.get("num_deterministic_link_facts", 0),
-                                            "num_merged_candidate_facts": debug_info.get("num_merged_candidate_facts", 0)
-                                        })
-                            
-                            # CRITICAL: Ensure we have facts before storing
-                            if not extracted_facts or len(extracted_facts) == 0:
-                                st.error("❌ No facts extracted. Please check your input and try again.")
-                                if show_debug_stage1 and debug_info:
+                                st.error(f"⚠️ **Debug: extracted_facts is empty or None!**")
+                                if debug_info:
                                     st.json({
+                                        "debug_info_keys": list(debug_info.keys()),
                                         "accepted_facts_count": len(debug_info.get("accepted_facts", [])),
                                         "rejected_facts_count": len(debug_info.get("rejected_facts", [])),
                                         "raw_candidate_facts_count": len(debug_info.get("raw_candidate_facts", [])),
                                         "num_llm_candidate_facts": debug_info.get("num_llm_candidate_facts", 0),
                                         "num_deterministic_link_facts": debug_info.get("num_deterministic_link_facts", 0),
-                                        "num_merged_candidate_facts": debug_info.get("num_merged_candidate_facts", 0),
-                                        "debug_info_keys": list(debug_info.keys())
+                                        "num_merged_candidate_facts": debug_info.get("num_merged_candidate_facts", 0)
                                     })
-                                    # Show rejected facts with reasons
-                                    rejected = debug_info.get("rejected_facts", [])
-                                    if rejected:
-                                        st.subheader("Rejected Facts (with reasons)")
-                                        for idx, r in enumerate(rejected[:5]):  # Show first 5
-                                            st.write(f"{idx+1}. {r.get('fact', 'N/A')[:100]}...")
-                                            st.write(f"   Reasons: {r.get('rejection_reasons', [])}")
-                            else:
-                                # Store extracted facts
-                                st.session_state.extracted_facts = extracted_facts
-                                st.session_state.source_text = profile_text
-                                
-                                if show_debug_stage1:
-                                    st.success(f"✅ **Stored {len(extracted_facts)} facts to session state**")
-                                    st.write(f"🔍 **Debug: Session state extracted_facts count: {len(st.session_state.extracted_facts)}**")
-                                
-                                # Display debug info BEFORE rerun (if enabled)
-                                if show_debug_stage1 and debug_info:
+                        
+                        # CRITICAL: Ensure we have facts before storing
+                        if not extracted_facts or len(extracted_facts) == 0:
+                            st.error("❌ No facts extracted. Please check your input and try again.")
+                            if show_debug_stage1 and debug_info:
+                                st.json({
+                                    "accepted_facts_count": len(debug_info.get("accepted_facts", [])),
+                                    "rejected_facts_count": len(debug_info.get("rejected_facts", [])),
+                                    "raw_candidate_facts_count": len(debug_info.get("raw_candidate_facts", [])),
+                                    "num_llm_candidate_facts": debug_info.get("num_llm_candidate_facts", 0),
+                                    "num_deterministic_link_facts": debug_info.get("num_deterministic_link_facts", 0),
+                                    "num_merged_candidate_facts": debug_info.get("num_merged_candidate_facts", 0),
+                                    "debug_info_keys": list(debug_info.keys())
+                                })
+                                # Show rejected facts with reasons
+                                rejected = debug_info.get("rejected_facts", [])
+                                if rejected:
+                                    st.subheader("Rejected Facts (with reasons)")
+                                    for idx, r in enumerate(rejected[:5]):  # Show first 5
+                                        st.write(f"{idx+1}. {r.get('fact', 'N/A')[:100]}...")
+                                        st.write(f"   Reasons: {r.get('rejection_reasons', [])}")
+                        else:
+                            # Store extracted facts
+                            st.session_state.extracted_facts = extracted_facts
+                            st.session_state.source_text = profile_text
+                            
+                            if show_debug_stage1:
+                                st.success(f"✅ **Stored {len(extracted_facts)} facts to session state**")
+                                st.write(f"🔍 **Debug: Session state extracted_facts count: {len(st.session_state.extracted_facts)}**")
+                            
+                            # Display debug info BEFORE rerun (if enabled)
+                            if show_debug_stage1 and debug_info:
                                     st.markdown("---")
                                     st.subheader("🔍 Stage 1 Debug Information")
                                     
