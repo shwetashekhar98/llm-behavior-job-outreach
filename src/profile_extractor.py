@@ -478,6 +478,13 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
             confidence = fact_data.get("confidence", 0.5)
             category = fact_data.get("category", "other")
             
+            # AWARD SUBJECT NORMALIZATION: If category=="awards" and fact starts with "Won "
+            # Rewrite to "I " + original fact (keep evidence unchanged)
+            if category.lower() == "awards" and fact_text.lower().startswith("won "):
+                fact_text = "I " + fact_text
+                # Update fact_data with normalized fact
+                fact_data["fact"] = fact_text
+            
             # INTEGRITY CHECK 1: Evidence must exist
             if not evidence or len(evidence) == 0:
                 integrity_warnings.append(f"Fact {idx+1}: Empty evidence for fact '{fact_text[:50]}...'")
