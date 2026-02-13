@@ -459,20 +459,20 @@ if st.session_state.stage == "profile_input":
                                         else:
                                             st.error("⚠️ Facts not stored. Cannot proceed to Stage 2.")
                                             st.json({"session_state_keys": list(st.session_state.keys())})
+                            else:
+                                # Normal flow: auto-advance (when debug is disabled)
+                                # Verify facts are stored before advancing
+                                if "extracted_facts" in st.session_state and st.session_state.extracted_facts:
+                                    st.session_state.stage = "fact_confirmation"
+                                    st.rerun()
                                 else:
-                                    # Normal flow: auto-advance (when debug is disabled)
-                                    # Verify facts are stored before advancing
-                                    if "extracted_facts" in st.session_state and st.session_state.extracted_facts:
-                                        st.session_state.stage = "fact_confirmation"
-                                        st.rerun()
-                                    else:
-                                        st.error("⚠️ Facts not stored. Cannot proceed to Stage 2.")
-                                        if show_debug_stage1:
-                                            st.json({
-                                                "session_state_keys": list(st.session_state.keys()),
-                                                "extracted_facts_in_session": "extracted_facts" in st.session_state,
-                                                "extracted_facts_value": st.session_state.get("extracted_facts", "NOT_FOUND")
-                                            })
+                                    st.error("⚠️ Facts not stored. Cannot proceed to Stage 2.")
+                                    if show_debug_stage1:
+                                        st.json({
+                                            "session_state_keys": list(st.session_state.keys()),
+                                            "extracted_facts_in_session": "extracted_facts" in st.session_state,
+                                            "extracted_facts_value": st.session_state.get("extracted_facts", "NOT_FOUND")
+                                        })
                     except Exception as e:
                         st.error(f"❌ Extraction error: {e}")
             else:
