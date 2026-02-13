@@ -448,32 +448,32 @@ if st.session_state.stage == "profile_input":
                                                 st.write(f"- `{reason}`: {count}")
                                     else:
                                         st.info("No facts were rejected.")
-                            
-                            st.markdown("---")
-                            
-                            # Don't auto-advance if debug is enabled - let user click button
-                            if st.button("➡️ Continue to Fact Confirmation", type="primary"):
-                                # Verify facts are stored before advancing
-                                if "extracted_facts" in st.session_state and st.session_state.extracted_facts:
-                                    st.session_state.stage = "fact_confirmation"
-                                    st.rerun()
+                                    
+                                    st.markdown("---")
+                                    
+                                    # Don't auto-advance if debug is enabled - let user click button
+                                    if st.button("➡️ Continue to Fact Confirmation", type="primary"):
+                                        # Verify facts are stored before advancing
+                                        if "extracted_facts" in st.session_state and st.session_state.extracted_facts:
+                                            st.session_state.stage = "fact_confirmation"
+                                            st.rerun()
+                                        else:
+                                            st.error("⚠️ Facts not stored. Cannot proceed to Stage 2.")
+                                            st.json({"session_state_keys": list(st.session_state.keys())})
                                 else:
-                                    st.error("⚠️ Facts not stored. Cannot proceed to Stage 2.")
-                                    st.json({"session_state_keys": list(st.session_state.keys())})
-                        else:
-                            # Normal flow: auto-advance
-                            # Verify facts are stored before advancing
-                            if "extracted_facts" in st.session_state and st.session_state.extracted_facts:
-                                st.session_state.stage = "fact_confirmation"
-                                st.rerun()
-                            else:
-                                st.error("⚠️ Facts not stored. Cannot proceed to Stage 2.")
-                                if show_debug_stage1:
-                                    st.json({
-                                        "session_state_keys": list(st.session_state.keys()),
-                                        "extracted_facts_in_session": "extracted_facts" in st.session_state,
-                                        "extracted_facts_value": st.session_state.get("extracted_facts", "NOT_FOUND")
-                                    })
+                                    # Normal flow: auto-advance (when debug is disabled)
+                                    # Verify facts are stored before advancing
+                                    if "extracted_facts" in st.session_state and st.session_state.extracted_facts:
+                                        st.session_state.stage = "fact_confirmation"
+                                        st.rerun()
+                                    else:
+                                        st.error("⚠️ Facts not stored. Cannot proceed to Stage 2.")
+                                        if show_debug_stage1:
+                                            st.json({
+                                                "session_state_keys": list(st.session_state.keys()),
+                                                "extracted_facts_in_session": "extracted_facts" in st.session_state,
+                                                "extracted_facts_value": st.session_state.get("extracted_facts", "NOT_FOUND")
+                                            })
                     except Exception as e:
                         st.error(f"❌ Extraction error: {e}")
             else:
