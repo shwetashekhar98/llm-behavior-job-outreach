@@ -210,14 +210,11 @@ if st.session_state.stage == "profile_input":
                         else:
                             extracted_facts = result
                         
-                        # Diagnostic: Show what we got
-                        if show_debug_stage1:
-                            st.write(f"**Debug Status:** show_debug_stage1={show_debug_stage1}, debug_info={'present' if debug_info else 'None'}, result_type={type(result).__name__}")
-                            if debug_info:
-                                st.write(f"**Debug Info Keys:** {list(debug_info.keys())}")
-                                st.write(f"**Rejected Facts Count:** {len(debug_info.get('rejected_facts', []))}")
+                        # Store extracted facts
+                        st.session_state.extracted_facts = extracted_facts
+                        st.session_state.source_text = profile_text
                         
-                        # Display debug info BEFORE rerun
+                        # Display debug info BEFORE rerun (if enabled)
                         if show_debug_stage1 and debug_info:
                             st.markdown("---")
                             st.subheader("🔍 Stage 1 Debug Information")
@@ -247,21 +244,29 @@ if st.session_state.stage == "profile_input":
                                 # Show summary of rejection reasons
                                 reason_counts = {}
                                 for item in rejected:
-                                    for reason in item.get("rejection_reasons", []):
-                                        reason_counts[reason] = reason_counts.get(reason, 0) + 1
+                                    reasons = item.get("rejection_reasons", [])
+                                    if isinstance(reasons, list):
+                                        for reason in reasons:
+                                            reason_counts[reason] = reason_counts.get(reason, 0) + 1
+                                    else:
+                                        st.warning(f"⚠️ Item missing rejection_reasons: {item}")
                                 if reason_counts:
                                     st.write("**Rejection reason summary:**")
-                                    for reason, count in reason_counts.items():
-                                        st.write(f"- {reason}: {count}")
+                                    for reason, count in sorted(reason_counts.items()):
+                                        st.write(f"- `{reason}`: {count}")
                             else:
                                 st.info("No facts were rejected.")
                             
                             st.markdown("---")
-                        
-                        st.session_state.extracted_facts = extracted_facts
-                        st.session_state.source_text = profile_text
-                        st.session_state.stage = "fact_confirmation"
-                        st.rerun()
+                            
+                            # Don't auto-advance if debug is enabled - let user click button
+                            if st.button("➡️ Continue to Fact Confirmation", type="primary"):
+                                st.session_state.stage = "fact_confirmation"
+                                st.rerun()
+                        else:
+                            # Normal flow: auto-advance
+                            st.session_state.stage = "fact_confirmation"
+                            st.rerun()
                     except Exception as e:
                         st.error(f"❌ Extraction error: {e}")
             else:
