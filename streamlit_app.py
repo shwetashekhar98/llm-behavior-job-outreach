@@ -722,6 +722,12 @@ elif st.session_state.stage == "fact_confirmation":
                     else:
                         approved_facts_values.append(fact)
                 
+                # Debug: Check approved facts
+                if len(approved_facts_values) == 0:
+                    st.error("⚠️ No facts approved. Please approve at least one fact before proceeding.")
+                    st.rerun()
+                    return
+                
                 rejected_facts = [f["value"] for idx, f in enumerate(extracted_facts) 
                                  if not st.session_state.fact_states.get(idx, False)]
                 manual_facts_list = [f for f in approved_facts_values if f not in [fact.get("value", "") for fact in extracted_facts]]
@@ -732,8 +738,18 @@ elif st.session_state.stage == "fact_confirmation":
                     manual_facts_list
                 )
                 
+                # Debug: Verify stage2_result
+                if not stage2_result.get("approved_facts_final"):
+                    st.error(f"⚠️ prepare_approved_facts returned empty approved_facts_final. Input had {len(approved_facts_values)} approved facts.")
+                    st.json({"stage2_result": stage2_result, "approved_facts_values": approved_facts_values})
+                    st.rerun()
+                    return
+                
                 st.session_state.approved_facts = stage2_result["approved_facts_final"]
                 st.session_state.link_facts = stage2_result["link_facts"]
+                
+                # Debug: Verify storage
+                st.success(f"✅ Stored {len(st.session_state.approved_facts)} approved facts. Proceeding to Stage 3...")
                 
                 # Store high-stakes metadata if enabled
                 if enable_high_stakes:
