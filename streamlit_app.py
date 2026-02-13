@@ -295,8 +295,7 @@ if st.session_state.stage == "profile_input":
                             "structured_fields": {},
                             "links": links_dict
                         }
-                        try:
-                            result = extract_facts_with_evidence(
+                        result = extract_facts_with_evidence(
                                 profile_input,
                                 api_key,
                                 model,
