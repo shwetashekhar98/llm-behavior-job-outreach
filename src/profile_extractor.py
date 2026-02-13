@@ -304,6 +304,9 @@ def extract_candidate_facts(
     warnings = []
     candidate_facts = []  # This will be populated with validated facts after validation loop
     
+    # CRITICAL: Define DEBUG_STAGE1 at the very beginning, before any code that uses it
+    DEBUG_STAGE1 = os.getenv("DEBUG_STAGE1", "False").lower() == "true"
+    
     # Determine parse quality
     structured_fields = profile_input.get("structured_fields", {})
     unstructured_text = profile_input.get("unstructured_text", "")
@@ -472,12 +475,8 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
         # ============================================================================
         # Raw output will be shown in UI after extraction completes
         
-        # ============================================================================
-        # DEBUG LOGGING: Store raw LLM response for file logging (if env var set)
-        # ============================================================================
-        DEBUG_STAGE1 = os.getenv("DEBUG_STAGE1", "False").lower() == "true"
-        
         # Store debug info for UI display - use deep copy
+        # Note: DEBUG_STAGE1 is already defined at the start of the function
         debug_info = {
             "raw_candidate_facts": copy.deepcopy(raw_candidate_facts_deep) if show_debug else [],
             "rejected_facts": [],
