@@ -870,15 +870,21 @@ def extract_facts_with_evidence(
     
     # Priority 1: Use accepted_facts from debug_info (most reliable, contains validated facts)
     if show_debug and "accepted_facts" in debug_info:
-        source_facts = debug_info["accepted_facts"]
+        accepted = debug_info["accepted_facts"]
+        if accepted and len(accepted) > 0:
+            source_facts = accepted
     
     # Priority 2: Use candidate_facts from stage1_result (validated facts)
-    if not source_facts:
-        source_facts = stage1_result.get("candidate_facts", [])
+    if not source_facts or len(source_facts) == 0:
+        candidate = stage1_result.get("candidate_facts", [])
+        if candidate and len(candidate) > 0:
+            source_facts = candidate
     
     # Priority 3: If still empty and we have processed_candidate_facts in debug_info, use those
-    if not source_facts and show_debug and "processed_candidate_facts" in debug_info:
-        source_facts = debug_info["processed_candidate_facts"]
+    if (not source_facts or len(source_facts) == 0) and show_debug and "processed_candidate_facts" in debug_info:
+        processed = debug_info["processed_candidate_facts"]
+        if processed and len(processed) > 0:
+            source_facts = processed
     
     # Convert to UI format - PRESERVE FACT-EVIDENCE PAIRING
     facts_for_ui = []
