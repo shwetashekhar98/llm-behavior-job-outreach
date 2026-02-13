@@ -764,30 +764,6 @@ elif st.session_state.stage == "fact_confirmation":
                         
                         st.session_state.stage = "message_generation"
                         st.rerun()
-                
-                st.session_state.approved_facts = stage2_result["approved_facts_final"]
-                st.session_state.link_facts = stage2_result["link_facts"]
-                
-                # Debug: Verify storage
-                st.success(f"✅ Stored {len(st.session_state.approved_facts)} approved facts. Proceeding to Stage 3...")
-                
-                # Store high-stakes metadata if enabled
-                if enable_high_stakes:
-                    high_stakes_metadata = {}
-                    for idx, fact in enumerate(extracted_facts):
-                        fact_text = fact.get("value", "")
-                        category = fact.get("category", "other")
-                        if is_high_stakes(fact_text, category):
-                            verification_key = f"verify_status_{idx}"
-                            url_key = f"verify_url_{idx}"
-                            high_stakes_metadata[fact_text] = {
-                                "verification_status": st.session_state.high_stakes_verification.get(verification_key, "unverified"),
-                                "verification_url": st.session_state.high_stakes_urls.get(url_key, "")
-                            }
-                    st.session_state.high_stakes_metadata = high_stakes_metadata
-                
-                st.session_state.stage = "message_generation"
-                st.rerun()
         
         with col2:
             if st.button("← Back to Profile Input", use_container_width=True):
