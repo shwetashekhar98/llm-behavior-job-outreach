@@ -893,6 +893,14 @@ def extract_facts_with_evidence(
         if source_facts:
             st.write(f"🔍 **First source fact keys: {list(source_facts[0].keys())}**")
             st.write(f"🔍 **First source fact: {source_facts[0].get('fact', 'N/A')[:50]}...**")
+            # Check for link facts
+            link_facts_in_source = [f for f in source_facts if f.get("category", "").lower() == "links"]
+            if link_facts_in_source:
+                st.write(f"🔍 **Link facts found in source: {len(link_facts_in_source)}**")
+                for link_fact in link_facts_in_source:
+                    st.write(f"  - {link_fact.get('fact', 'N/A')}")
+            else:
+                st.warning("⚠️ **No link facts found in source_facts**")
     
     # Convert to UI format - PRESERVE FACT-EVIDENCE PAIRING
     facts_for_ui = []
@@ -932,6 +940,14 @@ def extract_facts_with_evidence(
         if facts_for_ui:
             st.write(f"🔍 **First UI fact keys: {list(facts_for_ui[0].keys())}**")
             st.write(f"🔍 **First UI fact value: {facts_for_ui[0].get('value', 'N/A')[:50]}...**")
+            # Check for link facts in UI format
+            link_facts_in_ui = [f for f in facts_for_ui if "github" in f.get("value", "").lower() or "linkedin" in f.get("value", "").lower() or "profile link" in f.get("value", "").lower() or f.get("category", "").lower() == "links"]
+            if link_facts_in_ui:
+                st.write(f"🔍 **Link facts in UI format: {len(link_facts_in_ui)}**")
+                for link_fact in link_facts_in_ui:
+                    st.write(f"  - {link_fact.get('value', 'N/A')}")
+            else:
+                st.warning("⚠️ **No link facts found in facts_for_ui**")
     
     # Return debug info if requested (for UI display)
     if show_debug and debug_info:
