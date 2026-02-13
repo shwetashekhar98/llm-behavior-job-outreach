@@ -363,85 +363,85 @@ if st.session_state.stage == "profile_input":
                                 
                                 # Display debug info BEFORE rerun (if enabled)
                                 if show_debug_stage1 and debug_info:
-                            st.markdown("---")
-                            st.subheader("🔍 Stage 1 Debug Information")
-                            
-                            # Integrity warnings
-                            integrity_warnings = debug_info.get("integrity_warnings", [])
-                            if integrity_warnings:
-                                st.error("⚠️ **Evidence Integrity Warnings:**")
-                                for warning in integrity_warnings:
-                                    st.text(warning)
-                                st.markdown("---")
-                            
-                            # Raw LLM output
-                            st.subheader("Stage 1 Raw LLM Output (from LLM)")
-                            raw_facts = debug_info.get("raw_candidate_facts", [])
-                            raw_warnings = debug_info.get("raw_warnings", [])
-                            st.json({
-                                "candidate_facts": raw_facts,
-                                "warnings": raw_warnings,
-                                "total_raw": len(raw_facts)
-                            })
-                            
-                            # Show fact-evidence pairs from raw output
-                            if raw_facts:
-                                st.write("**Raw Fact-Evidence Pairs:**")
-                                for idx, fact in enumerate(raw_facts):
-                                    st.text(f"{idx+1}. Fact: {fact.get('fact', '')[:60]}...")
-                                    st.text(f"   Evidence: {fact.get('evidence', '')[:60]}...")
-                            
-                            # Link extraction stats
-                            num_llm = debug_info.get("num_llm_candidate_facts", 0)
-                            num_deterministic = debug_info.get("num_deterministic_link_facts", 0)
-                            num_merged = debug_info.get("num_merged_candidate_facts", 0)
-                            merged_links = debug_info.get("merged_link_facts", [])
-                            
-                            st.write("**Link Extraction Stats:**")
-                            st.write(f"- LLM candidate facts: {num_llm}")
-                            st.write(f"- Deterministic link facts: {num_deterministic}")
-                            st.write(f"- Merged candidate facts: {num_merged}")
-                            if merged_links:
-                                st.write("**Merged Link Facts (added deterministically):**")
-                                for link_fact in merged_links:
-                                    st.text(f"  - {link_fact.get('fact', '')}")
-                            
-                            # Processed candidate facts (for comparison)
-                            st.subheader("Stage 1 Processed Candidate Facts (after validation)")
-                            processed_facts = debug_info.get("processed_candidate_facts", [])
-                            if processed_facts:
-                                st.json(processed_facts)
-                                st.caption(f"Total processed: {len(processed_facts)}")
-                                
-                                # Show fact-evidence pairs from processed output
-                                st.write("**Processed Fact-Evidence Pairs:**")
-                                for idx, fact in enumerate(processed_facts):
-                                    st.text(f"{idx+1}. Fact: {fact.get('fact', '')[:60]}...")
-                                    st.text(f"   Evidence: {fact.get('evidence', '')[:60]}...")
-                                    original_idx = fact.get("_original_index", "?")
-                                    st.text(f"   Original index: {original_idx}")
-                            
-                            # Accepted facts
-                            st.subheader("Stage 1 Accepted Facts")
-                            accepted = debug_info.get("accepted_facts", [])
-                            st.json(accepted)
-                            st.caption(f"Total accepted: {len(accepted)}")
-                            
-                            # Rejected facts with reasons
-                            st.subheader("Stage 1 Rejected Facts + Reasons")
-                            rejected = debug_info.get("rejected_facts", [])
-                            if rejected:
-                                st.json(rejected)
-                                st.caption(f"Total rejected: {len(rejected)}")
-                                # Show summary of rejection reasons
-                                reason_counts = {}
-                                for item in rejected:
-                                    reasons = item.get("rejection_reasons", [])
-                                    if isinstance(reasons, list):
-                                        for reason in reasons:
-                                            reason_counts[reason] = reason_counts.get(reason, 0) + 1
-                                    else:
-                                        st.warning(f"⚠️ Item missing rejection_reasons: {item}")
+                                    st.markdown("---")
+                                    st.subheader("🔍 Stage 1 Debug Information")
+                                    
+                                    # Integrity warnings
+                                    integrity_warnings = debug_info.get("integrity_warnings", [])
+                                    if integrity_warnings:
+                                        st.error("⚠️ **Evidence Integrity Warnings:**")
+                                        for warning in integrity_warnings:
+                                            st.text(warning)
+                                        st.markdown("---")
+                                    
+                                    # Raw LLM output
+                                    st.subheader("Stage 1 Raw LLM Output (from LLM)")
+                                    raw_facts = debug_info.get("raw_candidate_facts", [])
+                                    raw_warnings = debug_info.get("raw_warnings", [])
+                                    st.json({
+                                        "candidate_facts": raw_facts,
+                                        "warnings": raw_warnings,
+                                        "total_raw": len(raw_facts)
+                                    })
+                                    
+                                    # Show fact-evidence pairs from raw output
+                                    if raw_facts:
+                                        st.write("**Raw Fact-Evidence Pairs:**")
+                                        for idx, fact in enumerate(raw_facts):
+                                            st.text(f"{idx+1}. Fact: {fact.get('fact', '')[:60]}...")
+                                            st.text(f"   Evidence: {fact.get('evidence', '')[:60]}...")
+                                    
+                                    # Link extraction stats
+                                    num_llm = debug_info.get("num_llm_candidate_facts", 0)
+                                    num_deterministic = debug_info.get("num_deterministic_link_facts", 0)
+                                    num_merged = debug_info.get("num_merged_candidate_facts", 0)
+                                    merged_links = debug_info.get("merged_link_facts", [])
+                                    
+                                    st.write("**Link Extraction Stats:**")
+                                    st.write(f"- LLM candidate facts: {num_llm}")
+                                    st.write(f"- Deterministic link facts: {num_deterministic}")
+                                    st.write(f"- Merged candidate facts: {num_merged}")
+                                    if merged_links:
+                                        st.write("**Merged Link Facts (added deterministically):**")
+                                        for link_fact in merged_links:
+                                            st.text(f"  - {link_fact.get('fact', '')}")
+                                    
+                                    # Processed candidate facts (for comparison)
+                                    st.subheader("Stage 1 Processed Candidate Facts (after validation)")
+                                    processed_facts = debug_info.get("processed_candidate_facts", [])
+                                    if processed_facts:
+                                        st.json(processed_facts)
+                                        st.caption(f"Total processed: {len(processed_facts)}")
+                                        
+                                        # Show fact-evidence pairs from processed output
+                                        st.write("**Processed Fact-Evidence Pairs:**")
+                                        for idx, fact in enumerate(processed_facts):
+                                            st.text(f"{idx+1}. Fact: {fact.get('fact', '')[:60]}...")
+                                            st.text(f"   Evidence: {fact.get('evidence', '')[:60]}...")
+                                            original_idx = fact.get("_original_index", "?")
+                                            st.text(f"   Original index: {original_idx}")
+                                    
+                                    # Accepted facts
+                                    st.subheader("Stage 1 Accepted Facts")
+                                    accepted = debug_info.get("accepted_facts", [])
+                                    st.json(accepted)
+                                    st.caption(f"Total accepted: {len(accepted)}")
+                                    
+                                    # Rejected facts with reasons
+                                    st.subheader("Stage 1 Rejected Facts + Reasons")
+                                    rejected = debug_info.get("rejected_facts", [])
+                                    if rejected:
+                                        st.json(rejected)
+                                        st.caption(f"Total rejected: {len(rejected)}")
+                                        # Show summary of rejection reasons
+                                        reason_counts = {}
+                                        for item in rejected:
+                                            reasons = item.get("rejection_reasons", [])
+                                            if isinstance(reasons, list):
+                                                for reason in reasons:
+                                                    reason_counts[reason] = reason_counts.get(reason, 0) + 1
+                                            else:
+                                                st.warning(f"⚠️ Item missing rejection_reasons: {item}")
                                 if reason_counts:
                                     st.write("**Rejection reason summary:**")
                                     for reason, count in sorted(reason_counts.items()):
