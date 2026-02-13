@@ -1005,6 +1005,54 @@ elif st.session_state.stage == "results":
         
         st.markdown("---")
         
+        # ============================================================================
+        # Day-4 Failure Distribution Visual
+        # ============================================================================
+        st.markdown("### 📉 Failure Distribution (Day 4 Visual)")
+        
+        try:
+            from src.visuals_failure_distribution import (
+                compute_failure_buckets,
+                generate_failure_distribution_chart
+            )
+            
+            # Compute failure buckets
+            failure_buckets = compute_failure_buckets(results, overall_metrics)
+            
+            if failure_buckets:
+                # Get top bucket for footer
+                top_bucket = list(failure_buckets.keys())[0] if failure_buckets else None
+                pass_rate_pct = overall_metrics.get("pass_rate", 0) * 100
+                
+                # Generate chart
+                chart_buffer = generate_failure_distribution_chart(
+                    failure_buckets,
+                    pass_rate=pass_rate_pct,
+                    top_bucket=top_bucket
+                )
+                
+                # Display chart
+                st.image(chart_buffer, use_container_width=True)
+                
+                # Download button
+                st.download_button(
+                    "📥 Download Chart (PNG)",
+                    chart_buffer.getvalue(),
+                    "day4_failure_distribution.png",
+                    "image/png",
+                    use_container_width=True,
+                    key="download_failure_chart"
+                )
+            else:
+                st.info("No failures detected in evaluation results.")
+                
+        except Exception as e:
+            st.warning(f"Could not generate failure distribution chart: {e}")
+            import traceback
+            st.code(traceback.format_exc())
+        
+        st.markdown("---")
+        
         # Detailed Results
         st.markdown("### Detailed Results by Scenario")
         
