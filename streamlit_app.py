@@ -293,13 +293,34 @@ if st.session_state.stage == "profile_input":
                         
                         # Debug: Log what we're storing
                         if show_debug_stage1:
-                            st.write(f"🔍 **Debug: Storing {len(extracted_facts) if extracted_facts else 0} facts to session state**")
+                            st.write(f"🔍 **Debug: extract_facts_with_evidence returned {len(extracted_facts) if extracted_facts else 0} facts**")
+                            st.write(f"🔍 **Debug: Type of result: {type(result)}**")
+                            if isinstance(result, tuple):
+                                st.write(f"🔍 **Debug: Tuple length: {len(result)}**")
                             if extracted_facts:
-                                st.write(f"First fact: {extracted_facts[0].get('value', 'N/A')[:50]}...")
+                                st.write(f"🔍 **Debug: First fact: {extracted_facts[0].get('value', 'N/A')[:50]}...**")
+                                st.write(f"🔍 **Debug: First fact keys: {list(extracted_facts[0].keys())}**")
+                            else:
+                                st.error(f"⚠️ **Debug: extracted_facts is empty or None!**")
+                                st.json({"result_type": type(result).__name__, "result": result})
                         
-                        # Store extracted facts
-                        st.session_state.extracted_facts = extracted_facts
-                        st.session_state.source_text = profile_text
+                        # CRITICAL: Ensure we have facts before storing
+                        if not extracted_facts:
+                            st.error("❌ No facts extracted. Please check your input and try again.")
+                            if show_debug_stage1 and debug_info:
+                                st.json({
+                                    "candidate_facts_count": len(stage1_result.get("candidate_facts", [])),
+                                    "accepted_facts_count": len(debug_info.get("accepted_facts", [])),
+                                    "debug_info_keys": list(debug_info.keys())
+                                })
+                        else:
+                            # Store extracted facts
+                            st.session_state.extracted_facts = extracted_facts
+                            st.session_state.source_text = profile_text
+                            
+                            if show_debug_stage1:
+                                st.success(f"✅ **Stored {len(extracted_facts)} facts to session state**")
+                                st.write(f"🔍 **Debug: Session state extracted_facts count: {len(st.session_state.extracted_facts)}**")
                         
                         # Display debug info BEFORE rerun (if enabled)
                         if show_debug_stage1 and debug_info:
@@ -393,12 +414,27 @@ if st.session_state.stage == "profile_input":
                             
                             # Don't auto-advance if debug is enabled - let user click button
                             if st.button("➡️ Continue to Fact Confirmation", type="primary"):
-                                st.session_state.stage = "fact_confirmation"
-                                st.rerun()
+                                # Verify facts are stored before advancing
+                                if "extracted_facts" in st.session_state and st.session_state.extracted_facts:
+                                    st.session_state.stage = "fact_confirmation"
+                                    st.rerun()
+                                else:
+                                    st.error("⚠️ Facts not stored. Cannot proceed to Stage 2.")
+                                    st.json({"session_state_keys": list(st.session_state.keys())})
                         else:
                             # Normal flow: auto-advance
-                            st.session_state.stage = "fact_confirmation"
-                            st.rerun()
+                            # Verify facts are stored before advancing
+                            if "extracted_facts" in st.session_state and st.session_state.extracted_facts:
+                                st.session_state.stage = "fact_confirmation"
+                                st.rerun()
+                            else:
+                                st.error("⚠️ Facts not stored. Cannot proceed to Stage 2.")
+                                if show_debug_stage1:
+                                    st.json({
+                                        "session_state_keys": list(st.session_state.keys()),
+                                        "extracted_facts_in_session": "extracted_facts" in st.session_state,
+                                        "extracted_facts_value": st.session_state.get("extracted_facts", "NOT_FOUND")
+                                    })
                     except Exception as e:
                         st.error(f"❌ Extraction error: {e}")
             else:

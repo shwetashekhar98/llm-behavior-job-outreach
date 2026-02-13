@@ -886,6 +886,14 @@ def extract_facts_with_evidence(
         if processed and len(processed) > 0:
             source_facts = processed
     
+    # Debug: Log source facts
+    if show_debug:
+        import streamlit as st
+        st.write(f"🔍 **extract_facts_with_evidence: source_facts count = {len(source_facts)}**")
+        if source_facts:
+            st.write(f"🔍 **First source fact keys: {list(source_facts[0].keys())}**")
+            st.write(f"🔍 **First source fact: {source_facts[0].get('fact', 'N/A')[:50]}...**")
+    
     # Convert to UI format - PRESERVE FACT-EVIDENCE PAIRING
     facts_for_ui = []
     for idx, fact_data in enumerate(source_facts):
@@ -916,6 +924,14 @@ def extract_facts_with_evidence(
             "evidence_source": "extracted",
             "_original_index": fact_data.get("_original_index", idx)  # Preserve for debugging
         })
+    
+    # Debug: Log facts_for_ui
+    if show_debug:
+        import streamlit as st
+        st.write(f"🔍 **extract_facts_with_evidence: facts_for_ui count = {len(facts_for_ui)}**")
+        if facts_for_ui:
+            st.write(f"🔍 **First UI fact keys: {list(facts_for_ui[0].keys())}**")
+            st.write(f"🔍 **First UI fact value: {facts_for_ui[0].get('value', 'N/A')[:50]}...**")
     
     # Return debug info if requested (for UI display)
     if show_debug and debug_info:
