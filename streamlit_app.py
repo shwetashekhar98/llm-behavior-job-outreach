@@ -725,25 +725,45 @@ elif st.session_state.stage == "fact_confirmation":
                 # Debug: Check approved facts
                 if len(approved_facts_values) == 0:
                     st.error("⚠️ No facts approved. Please approve at least one fact before proceeding.")
-                    st.rerun()
-                    return
-                
-                rejected_facts = [f["value"] for idx, f in enumerate(extracted_facts) 
-                                 if not st.session_state.fact_states.get(idx, False)]
-                manual_facts_list = [f for f in approved_facts_values if f not in [fact.get("value", "") for fact in extracted_facts]]
-                
-                stage2_result = prepare_approved_facts(
-                    approved_facts_values,
-                    rejected_facts,
-                    manual_facts_list
-                )
-                
-                # Debug: Verify stage2_result
-                if not stage2_result.get("approved_facts_final"):
-                    st.error(f"⚠️ prepare_approved_facts returned empty approved_facts_final. Input had {len(approved_facts_values)} approved facts.")
-                    st.json({"stage2_result": stage2_result, "approved_facts_values": approved_facts_values})
-                    st.rerun()
-                    return
+                else:
+                    rejected_facts = [f["value"] for idx, f in enumerate(extracted_facts) 
+                                     if not st.session_state.fact_states.get(idx, False)]
+                    manual_facts_list = [f for f in approved_facts_values if f not in [fact.get("value", "") for fact in extracted_facts]]
+                    
+                    stage2_result = prepare_approved_facts(
+                        approved_facts_values,
+                        rejected_facts,
+                        manual_facts_list
+                    )
+                    
+                    # Debug: Verify stage2_result
+                    if not stage2_result.get("approved_facts_final"):
+                        st.error(f"⚠️ prepare_approved_facts returned empty approved_facts_final. Input had {len(approved_facts_values)} approved facts.")
+                        st.json({"stage2_result": stage2_result, "approved_facts_values": approved_facts_values})
+                    else:
+                        st.session_state.approved_facts = stage2_result["approved_facts_final"]
+                        st.session_state.link_facts = stage2_result["link_facts"]
+                        
+                        # Debug: Verify storage
+                        st.success(f"✅ Stored {len(st.session_state.approved_facts)} approved facts. Proceeding to Stage 3...")
+                        
+                        # Store high-stakes metadata if enabled
+                        if enable_high_stakes:
+                            high_stakes_metadata = {}
+                            for idx, fact in enumerate(extracted_facts):
+                                fact_text = fact.get("value", "")
+                                category = fact.get("category", "other")
+                                if is_high_stakes(fact_text, category):
+                                    verification_key = f"verify_status_{idx}"
+                                    url_key = f"verify_url_{idx}"
+                                    high_stakes_metadata[fact_text] = {
+                                        "verification_status": st.session_state.high_stakes_verification.get(verification_key, "unverified"),
+                                        "verification_url": st.session_state.high_stakes_urls.get(url_key, "")
+                                    }
+                            st.session_state.high_stakes_metadata = high_stakes_metadata
+                        
+                        st.session_state.stage = "message_generation"
+                        st.rerun()
                 
                 st.session_state.approved_facts = stage2_result["approved_facts_final"]
                 st.session_state.link_facts = stage2_result["link_facts"]
