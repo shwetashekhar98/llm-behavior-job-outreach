@@ -613,6 +613,10 @@ elif st.session_state.stage == "fact_confirmation":
                     )
                     st.session_state.fact_values[idx] = fact_value
                     
+                    # Show category badge for link facts
+                    if category.lower() == "links":
+                        st.caption("🔗 Link")
+                    
                     # Show high-stakes warning if enabled and fact is high-stakes
                     if enable_high_stakes and is_high:
                         st.markdown("⚠️ **High-Stakes Claim — verification recommended**")
