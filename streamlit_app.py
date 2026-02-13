@@ -196,18 +196,20 @@ if st.session_state.stage == "profile_input":
                             "structured_fields": {},
                             "links": {}
                         }
-                        extracted_facts = extract_facts_with_evidence(
+                        result = extract_facts_with_evidence(
                             profile_input,
                             api_key,
                             model,
                             show_debug_stage1
                         )
                         
-                        # Extract debug info if available
+                        # Extract debug info if available (returns tuple if debug enabled)
                         debug_info = None
-                        if show_debug_stage1 and hasattr(extracted_facts, '_debug_info'):
-                            debug_info = extracted_facts._debug_info
+                        if show_debug_stage1 and isinstance(result, tuple) and len(result) == 2:
+                            extracted_facts, debug_info = result
                             st.session_state.stage1_debug_info = debug_info
+                        else:
+                            extracted_facts = result
                         
                         # Display debug info if requested
                         if show_debug_stage1 and debug_info:

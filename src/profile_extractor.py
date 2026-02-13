@@ -611,13 +611,13 @@ def extract_facts_with_evidence(
             "evidence_source": "extracted"
         })
     
-    # Return debug info if available (UI will handle storing in session state)
-    result = facts_for_ui
+    # Store debug info in a way UI can access it
+    # We'll use a dict wrapper that the UI can check
     if show_debug and "debug_info" in stage1_result:
-        # Attach debug info as attribute (UI will extract it)
-        result._debug_info = stage1_result["debug_info"]
+        # Return tuple: (facts_list, debug_info_dict)
+        return (facts_for_ui, stage1_result["debug_info"])
     
-    return result
+    return facts_for_ui
 
 
 def extract_structured_profile(form_data: Dict) -> List[Dict]:
