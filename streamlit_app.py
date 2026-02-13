@@ -605,17 +605,17 @@ elif st.session_state.stage == "fact_confirmation":
                 if approved and fact_value:
                     # Add verification metadata if high-stakes feature is enabled
                     if enable_high_stakes and is_high:
-                    verification_key = f"verify_status_{idx}"
-                    url_key = f"verify_url_{idx}"
-                    fact_with_metadata = {
-                        "value": fact_value,
-                        "trust_flag": "high_stakes",
-                        "verification_status": st.session_state.high_stakes_verification.get(verification_key, "unverified"),
-                        "verification_url": st.session_state.high_stakes_urls.get(url_key, "")
-                    }
-                    approved_facts.append(fact_with_metadata)
-                else:
-                    approved_facts.append(fact_value)
+                        verification_key = f"verify_status_{idx}"
+                        url_key = f"verify_url_{idx}"
+                        fact_with_metadata = {
+                            "value": fact_value,
+                            "trust_flag": "high_stakes",
+                            "verification_status": st.session_state.high_stakes_verification.get(verification_key, "unverified"),
+                            "verification_url": st.session_state.high_stakes_urls.get(url_key, "")
+                        }
+                        approved_facts.append(fact_with_metadata)
+                    else:
+                        approved_facts.append(fact_value)
         
         # Manual fact addition
         st.markdown("---")
