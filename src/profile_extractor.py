@@ -302,7 +302,7 @@ def extract_candidate_facts(
     }
     """
     warnings = []
-    candidate_facts = []
+    candidate_facts = []  # This will be populated with validated facts after validation loop
     
     # Determine parse quality
     structured_fields = profile_input.get("structured_fields", {})
@@ -696,11 +696,18 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
             print(f"[DEBUG_STAGE1] Total accepted facts: {len(validated_facts)}")
             print(f"[DEBUG_STAGE1] Summary: {len(raw_candidate_facts)} raw → {len(validated_facts)} accepted → {len(rejected_facts)} rejected")
         
-        # Add validated facts to candidate_facts
+        # CRITICAL: Populate candidate_facts with validated facts
         # Note: Deterministic link facts were already merged with LLM facts before validation
         # So validated_facts may include link facts that passed validation
+        # This MUST happen regardless of debug mode
+        candidate_facts.clear()  # Clear any existing items (should be empty, but be safe)
         for fact in validated_facts:
             candidate_facts.append(copy.deepcopy(fact))
+        
+        # Debug: Verify candidate_facts is populated
+        if len(candidate_facts) == 0 and len(validated_facts) > 0:
+            import sys
+            print(f"[ERROR] candidate_facts is empty but validated_facts has {len(validated_facts)} items!", file=sys.stderr)
         
         # INTEGRITY CHECK: Verify fact-evidence alignment in final candidate_facts
         if show_debug or DEBUG_STAGE1:
@@ -886,10 +893,16 @@ def extract_facts_with_evidence(
             source_facts = candidate
         else:
             # If candidate_facts is empty, something went wrong - log it
-            import sys
-            if show_debug:
-                import streamlit as st
-                st.warning(f"⚠️ **WARNING: candidate_facts is empty in stage1_result. Keys: {list(stage1_result.keys())}**")
+            # Always log this, not just in debug mode, to help diagnose issues
+            import streamlit as st
+            st.warning(f"⚠️ **WARNING: candidate_facts is empty in stage1_result. Keys: {list(stage1_result.keys())}**")
+            st.json({
+                "stage1_result_keys": list(stage1_result.keys()),
+                "candidate_facts_type": type(candidate).__name__,
+                "candidate_facts_length": len(candidate) if candidate else 0,
+                "stage1_result_stage": stage1_result.get("stage"),
+                "warnings": stage1_result.get("warnings", [])
+            })
     
     # Priority 3: If still empty and we have processed_candidate_facts in debug_info, use those
     if (not source_facts or len(source_facts) == 0) and show_debug and "processed_candidate_facts" in debug_info:
