@@ -720,13 +720,16 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
         if show_debug:
             debug_info["processed_candidate_facts"] = copy.deepcopy(candidate_facts)
         
+        # CRITICAL: candidate_facts should already contain all validated facts
+        # It was populated in the loop above (lines 702-703)
+        # Ensure it's not empty - if it is, something went wrong
         if len(candidate_facts) == 0:
             warnings.append("No valid facts extracted. Input may be too fragmented or incomplete.")
         
         result = {
             "stage": 1,
             "profile_parse_quality": parse_quality,
-            "candidate_facts": candidate_facts,
+            "candidate_facts": candidate_facts,  # This should contain all validated facts
             "warnings": warnings
         }
         
@@ -875,10 +878,18 @@ def extract_facts_with_evidence(
             source_facts = accepted
     
     # Priority 2: Use candidate_facts from stage1_result (validated facts)
+    # This should ALWAYS work, regardless of debug mode
+    # CRITICAL: candidate_facts should always be populated with validated facts
     if not source_facts or len(source_facts) == 0:
         candidate = stage1_result.get("candidate_facts", [])
         if candidate and len(candidate) > 0:
             source_facts = candidate
+        else:
+            # If candidate_facts is empty, something went wrong - log it
+            import sys
+            if show_debug:
+                import streamlit as st
+                st.warning(f"⚠️ **WARNING: candidate_facts is empty in stage1_result. Keys: {list(stage1_result.keys())}**")
     
     # Priority 3: If still empty and we have processed_candidate_facts in debug_info, use those
     if (not source_facts or len(source_facts) == 0) and show_debug and "processed_candidate_facts" in debug_info:
