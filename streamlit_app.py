@@ -674,20 +674,9 @@ elif st.session_state.stage == "fact_confirmation":
                             if url_key in st.session_state.high_stakes_urls:
                                 st.session_state.high_stakes_urls[url_key] = ""
                 
-                if approved and fact_value:
-                    # Add verification metadata if high-stakes feature is enabled
-                    if enable_high_stakes and is_high:
-                        verification_key = f"verify_status_{idx}"
-                        url_key = f"verify_url_{idx}"
-                        fact_with_metadata = {
-                            "value": fact_value,
-                            "trust_flag": "high_stakes",
-                            "verification_status": st.session_state.high_stakes_verification.get(verification_key, "unverified"),
-                            "verification_url": st.session_state.high_stakes_urls.get(url_key, "")
-                        }
-                        approved_facts.append(fact_with_metadata)
-                    else:
-                        approved_facts.append(fact_value)
+                # Note: approved_facts list is built during the loop, but we'll rebuild it
+                # when "Confirm Facts" is clicked to ensure we have current state
+                # This prevents issues when debug checkbox causes reruns
         
         # Manual fact addition
         st.markdown("---")
@@ -713,10 +702,40 @@ elif st.session_state.stage == "fact_confirmation":
         col1, col2 = st.columns(2)
         with col1:
             if st.button("✅ Confirm Facts", type="primary", use_container_width=True):
-                # Use Stage 2 preparation
+                # Rebuild approved_facts from current checkbox states (in case debug toggle caused rerun)
+                approved_facts_rebuilt = []
+                for idx, fact in enumerate(extracted_facts):
+                    is_approved = st.session_state.fact_states.get(idx, True)
+                    if is_approved:
+                        fact_value = st.session_state.fact_values.get(idx, fact.get("value", ""))
+                        if fact_value and fact_value.strip():
+                            # Handle high-stakes facts
+                            if enable_high_stakes:
+                                fact_text = fact.get("value", "")
+                                category = fact.get("category", "other")
+                                if is_high_stakes(fact_text, category):
+                                    verification_key = f"verify_status_{idx}"
+                                    url_key = f"verify_url_{idx}"
+                                    fact_with_metadata = {
+                                        "value": fact_value,
+                                        "trust_flag": "high_stakes",
+                                        "verification_status": st.session_state.high_stakes_verification.get(verification_key, "unverified"),
+                                        "verification_url": st.session_state.high_stakes_urls.get(url_key, "")
+                                    }
+                                    approved_facts_rebuilt.append(fact_with_metadata)
+                                else:
+                                    approved_facts_rebuilt.append(fact_value)
+                            else:
+                                approved_facts_rebuilt.append(fact_value)
+                
+                # Add manual facts if any
+                manual_fact = st.session_state.get("manual_fact", "")
+                if manual_fact and manual_fact.strip():
+                    approved_facts_rebuilt.append(manual_fact.strip())
+                
                 # Extract fact values (handle dict format for high-stakes facts)
                 approved_facts_values = []
-                for fact in approved_facts:
+                for fact in approved_facts_rebuilt:
                     if isinstance(fact, dict):
                         approved_facts_values.append(fact.get("value", ""))
                     else:
