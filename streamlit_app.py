@@ -510,101 +510,101 @@ elif st.session_state.stage == "fact_confirmation":
                 st.caption(f"📋 Showing {len(extracted_facts)} facts. First fact structure: {list(extracted_facts[0].keys())}")
             
             for idx, fact in enumerate(extracted_facts):
-            # Annotate fact with trust metadata if enabled
-            if enable_high_stakes:
-                fact = annotate_fact_with_trust(fact, enable_high_stakes=True)
-            
-            fact_text = fact.get("value", "")
-            category = fact.get("category", "other")
-            # Get trust flag from annotated fact
-            trust_flag = fact.get("trust_flag", "normal")
-            is_high = (trust_flag == "high_stakes") if enable_high_stakes else False
-            
-            if is_high:
-                high_stakes_count += 1
-            
-            # Determine column layout based on high-stakes feature
-            if enable_high_stakes and is_high:
-                col1, col2, col3, col4 = st.columns([1, 3, 2, 2])
-            else:
-                col1, col2, col3 = st.columns([1, 3, 2])
-            
-            with col1:
-                approved = st.checkbox(
-                    "Approve",
-                    value=st.session_state.fact_states.get(idx, True),
-                    key=f"fact_approve_{idx}"
-                )
-                st.session_state.fact_states[idx] = approved
-            
-            with col2:
-                fact_value = st.text_input(
-                    "Fact",
-                    value=st.session_state.fact_values.get(idx, fact.get("value", "")),
-                    key=f"fact_value_{idx}"
-                )
-                st.session_state.fact_values[idx] = fact_value
+                # Annotate fact with trust metadata if enabled
+                if enable_high_stakes:
+                    fact = annotate_fact_with_trust(fact, enable_high_stakes=True)
                 
-                # Show high-stakes warning if enabled and fact is high-stakes
+                fact_text = fact.get("value", "")
+                category = fact.get("category", "other")
+                # Get trust flag from annotated fact
+                trust_flag = fact.get("trust_flag", "normal")
+                is_high = (trust_flag == "high_stakes") if enable_high_stakes else False
+                
+                if is_high:
+                    high_stakes_count += 1
+                
+                # Determine column layout based on high-stakes feature
                 if enable_high_stakes and is_high:
-                    st.markdown("⚠️ **High-Stakes Claim — verification recommended**")
-            
-            with col3:
-                confidence = fact.get("confidence", 0.0)
-                st.caption(f"Confidence: {confidence:.0%}")
-                if source_text:
-                    quote = fact.get("source_quote", "")
-                    if quote:
-                        st.caption(f"Source: \"{quote[:50]}...\"")
-            
-            # High-stakes verification UI (only if enabled and fact is high-stakes)
-            if enable_high_stakes and is_high:
-                with col4:
-                    # Verification status dropdown
-                    verification_key = f"verify_status_{idx}"
-                    current_status = st.session_state.high_stakes_verification.get(verification_key, "unverified")
-                    
-                    verification_status = st.selectbox(
-                        "Verification status",
-                        ["unverified", "verified"],
-                        index=0 if current_status == "unverified" else 1,
-                        key=verification_key,
-                        help="Select 'verified' if you have a URL to verify this claim"
+                    col1, col2, col3, col4 = st.columns([1, 3, 2, 2])
+                else:
+                    col1, col2, col3 = st.columns([1, 3, 2])
+                
+                with col1:
+                    approved = st.checkbox(
+                        "Approve",
+                        value=st.session_state.fact_states.get(idx, True),
+                        key=f"fact_approve_{idx}"
                     )
-                    st.session_state.high_stakes_verification[verification_key] = verification_status
-                    
-                    # URL input (always show, but required if verified)
-                    url_key = f"verify_url_{idx}"
-                    verification_url = st.text_input(
-                        "Verification URL (required if verified)",
-                        value=st.session_state.high_stakes_urls.get(url_key, ""),
-                        key=url_key,
-                        placeholder="https://...",
-                        help="Provide a URL that verifies this claim"
+                    st.session_state.fact_states[idx] = approved
+                
+                with col2:
+                    fact_value = st.text_input(
+                        "Fact",
+                        value=st.session_state.fact_values.get(idx, fact.get("value", "")),
+                        key=f"fact_value_{idx}"
                     )
-                    st.session_state.high_stakes_urls[url_key] = verification_url
+                    st.session_state.fact_values[idx] = fact_value
                     
-                    # Update fact with verification metadata
-                    fact["verification_status"] = verification_status
-                    fact["verification_url"] = verification_url
-                    
-                    # Warn if verified but URL is empty
-                    if verification_status == "verified":
-                        if not verification_url or not verification_url.strip():
-                            st.warning("⚠️ Verification URL required to mark as verified. Treating as unverified.")
-                            fact["verification_status"] = "unverified"
-                            st.session_state.high_stakes_verification[verification_key] = "unverified"
+                    # Show high-stakes warning if enabled and fact is high-stakes
+                    if enable_high_stakes and is_high:
+                        st.markdown("⚠️ **High-Stakes Claim — verification recommended**")
+                
+                with col3:
+                    confidence = fact.get("confidence", 0.0)
+                    st.caption(f"Confidence: {confidence:.0%}")
+                    if source_text:
+                        quote = fact.get("source_quote", "")
+                        if quote:
+                            st.caption(f"Source: \"{quote[:50]}...\"")
+                
+                # High-stakes verification UI (only if enabled and fact is high-stakes)
+                if enable_high_stakes and is_high:
+                    with col4:
+                        # Verification status dropdown
+                        verification_key = f"verify_status_{idx}"
+                        current_status = st.session_state.high_stakes_verification.get(verification_key, "unverified")
+                        
+                        verification_status = st.selectbox(
+                            "Verification status",
+                            ["unverified", "verified"],
+                            index=0 if current_status == "unverified" else 1,
+                            key=verification_key,
+                            help="Select 'verified' if you have a URL to verify this claim"
+                        )
+                        st.session_state.high_stakes_verification[verification_key] = verification_status
+                        
+                        # URL input (always show, but required if verified)
+                        url_key = f"verify_url_{idx}"
+                        verification_url = st.text_input(
+                            "Verification URL (required if verified)",
+                            value=st.session_state.high_stakes_urls.get(url_key, ""),
+                            key=url_key,
+                            placeholder="https://...",
+                            help="Provide a URL that verifies this claim"
+                        )
+                        st.session_state.high_stakes_urls[url_key] = verification_url
+                        
+                        # Update fact with verification metadata
+                        fact["verification_status"] = verification_status
+                        fact["verification_url"] = verification_url
+                        
+                        # Warn if verified but URL is empty
+                        if verification_status == "verified":
+                            if not verification_url or not verification_url.strip():
+                                st.warning("⚠️ Verification URL required to mark as verified. Treating as unverified.")
+                                fact["verification_status"] = "unverified"
+                                st.session_state.high_stakes_verification[verification_key] = "unverified"
+                            else:
+                                verified_count += 1
                         else:
-                            verified_count += 1
-                    else:
-                        unverified_count += 1
-                        # Clear URL if status changed to unverified
-                        if url_key in st.session_state.high_stakes_urls:
-                            st.session_state.high_stakes_urls[url_key] = ""
-            
-            if approved and fact_value:
-                # Add verification metadata if high-stakes feature is enabled
-                if enable_high_stakes and is_high:
+                            unverified_count += 1
+                            # Clear URL if status changed to unverified
+                            if url_key in st.session_state.high_stakes_urls:
+                                st.session_state.high_stakes_urls[url_key] = ""
+                
+                if approved and fact_value:
+                    # Add verification metadata if high-stakes feature is enabled
+                    if enable_high_stakes and is_high:
                     verification_key = f"verify_status_{idx}"
                     url_key = f"verify_url_{idx}"
                     fact_with_metadata = {
