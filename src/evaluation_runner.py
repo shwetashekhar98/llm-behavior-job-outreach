@@ -11,6 +11,10 @@ from high_stakes_enforcement import (
     preprocess_facts_for_generation,
     detect_high_stakes_enforcement_violation
 )
+from enforcement_behavior_tracker import (
+    analyze_enforcement_behavior,
+    analyze_language_quality
+)
 
 
 def extract_confidence(text: str) -> float:

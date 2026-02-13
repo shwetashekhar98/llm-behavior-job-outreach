@@ -953,6 +953,9 @@ elif st.session_state.stage == "message_generation":
                         )
                         all_results.append(result)
                     
+                    # Store enforcement setting for visualization
+                    st.session_state.enforce_high_stakes_language = enforce_high_stakes_language
+                    
                     progress_bar.progress(1.0)
                     status_text.text("✅ Evaluation Complete!")
                     
@@ -1070,6 +1073,114 @@ elif st.session_state.stage == "results":
             st.warning(f"Could not generate failure distribution chart: {e}")
             import traceback
             st.code(traceback.format_exc())
+        
+        st.markdown("---")
+        
+        # ============================================================================
+        # High-Stakes Enforcement Behavior Visualization
+        # ============================================================================
+        st.markdown("### 🔒 High-Stakes Enforcement Behavior")
+        
+        try:
+            from src.visuals_enforcement_behavior import (
+                compute_enforcement_aggregates,
+                generate_enforcement_behavior_chart
+            )
+            
+            # Check if enforcement is enabled (from session state or results)
+            enforcement_enabled = st.session_state.get("enforce_high_stakes_language", False)
+            
+            # Compute aggregates
+            aggregates = compute_enforcement_aggregates(results)
+            
+            # Display summary box
+            col1, col2, col3, col4, col5 = st.columns(5)
+            
+            with col1:
+                st.markdown(f"""
+                <div style="background: #1e293b; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <div style="color: #94a3b8; font-size: 0.75rem; margin-bottom: 0.5rem;">Enforcement Enabled</div>
+                    <div style="color: {'#22c55e' if enforcement_enabled else '#ef4444'}; font-size: 1.25rem; font-weight: bold;">
+                        {'TRUE' if enforcement_enabled else 'FALSE'}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown(f"""
+                <div style="background: #1e293b; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <div style="color: #94a3b8; font-size: 0.75rem; margin-bottom: 0.5rem;">High-Stakes Facts</div>
+                    <div style="color: #38bdf8; font-size: 1.25rem; font-weight: bold;">
+                        {aggregates.get('total_high_stakes_facts_detected', 0)}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col3:
+                st.markdown(f"""
+                <div style="background: #1e293b; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <div style="color: #94a3b8; font-size: 0.75rem; margin-bottom: 0.5rem;">Softened</div>
+                    <div style="color: #3b82f6; font-size: 1.25rem; font-weight: bold;">
+                        {aggregates.get('softened_claims_count', 0)}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col4:
+                st.markdown(f"""
+                <div style="background: #1e293b; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <div style="color: #94a3b8; font-size: 0.75rem; margin-bottom: 0.5rem;">Suppressed</div>
+                    <div style="color: #f59e0b; font-size: 1.25rem; font-weight: bold;">
+                        {aggregates.get('suppressed_claims_count', 0)}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col5:
+                st.markdown(f"""
+                <div style="background: #1e293b; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <div style="color: #94a3b8; font-size: 0.75rem; margin-bottom: 0.5rem;">Violations</div>
+                    <div style="color: #ef4444; font-size: 1.25rem; font-weight: bold;">
+                        {aggregates.get('enforcement_violations_count', 0)}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Display awkward phrasing score
+            st.markdown("---")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                avg_awkward = aggregates.get('avg_awkward_score', 0)
+                st.markdown(f"""
+                <div style="background: #1e293b; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <div style="color: #94a3b8; font-size: 0.75rem; margin-bottom: 0.5rem;">Awkward Phrasing Score</div>
+                    <div style="color: {'#ef4444' if avg_awkward >= 2 else ('#f59e0b' if avg_awkward >= 1 else '#22c55e')}; font-size: 1.5rem; font-weight: bold;">
+                        {avg_awkward:.1f}/3
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                avg_hedging = aggregates.get('avg_hedging_density', 0)
+                st.markdown(f"""
+                <div style="background: #1e293b; padding: 1rem; border-radius: 8px; text-align: center;">
+                    <div style="color: #94a3b8; font-size: 0.75rem; margin-bottom: 0.5rem;">Hedging Density</div>
+                    <div style="color: #38bdf8; font-size: 1.5rem; font-weight: bold;">
+                        {avg_hedging:.1f} per 100 words
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Generate and display chart
+            chart_buffer = generate_enforcement_behavior_chart(aggregates)
+            st.image(chart_buffer, use_container_width=True)
+            
+        except Exception as e:
+            st.warning(f"Could not generate enforcement behavior visualization: {e}")
+            import traceback
+            if st.checkbox("Show error details", key="show_enforcement_error"):
+                st.code(traceback.format_exc())
         
         st.markdown("---")
         
