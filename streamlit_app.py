@@ -474,6 +474,12 @@ elif st.session_state.stage == "fact_confirmation":
         extracted_facts = st.session_state.extracted_facts
         source_text = st.session_state.get("source_text", "")
         
+        # Initialize variables (needed for high-stakes summary even if no facts)
+        approved_facts = []
+        high_stakes_count = 0
+        verified_count = 0
+        unverified_count = 0
+        
         # Debug: Show extracted facts count
         if not extracted_facts or len(extracted_facts) == 0:
             st.error("⚠️ No facts found in extracted_facts. Please go back to Stage 1 and try again.")
@@ -499,11 +505,6 @@ elif st.session_state.stage == "fact_confirmation":
                     st.session_state.high_stakes_verification = {}
                 if "high_stakes_urls" not in st.session_state:
                     st.session_state.high_stakes_urls = {}
-            
-            approved_facts = []
-            high_stakes_count = 0
-            verified_count = 0
-            unverified_count = 0
             
             # Debug: Show first fact structure if empty
             if len(extracted_facts) > 0:
