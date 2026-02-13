@@ -569,6 +569,13 @@ elif st.session_state.stage == "fact_confirmation":
             # Debug: Show first fact structure if empty
             if len(extracted_facts) > 0:
                 st.caption(f"📋 Showing {len(extracted_facts)} facts. First fact structure: {list(extracted_facts[0].keys())}")
+                
+                # Debug: Show link facts count
+                link_facts_count = sum(1 for f in extracted_facts if "github" in f.get("value", "").lower() or "linkedin" in f.get("value", "").lower() or "portfolio" in f.get("value", "").lower() or f.get("category", "").lower() == "links")
+                if link_facts_count > 0:
+                    st.info(f"🔗 Found {link_facts_count} link fact(s) in extracted_facts")
+                else:
+                    st.warning("⚠️ No link facts found in extracted_facts (but debug shows they were extracted)")
             
             for idx, fact in enumerate(extracted_facts):
                 # Annotate fact with trust metadata if enabled
