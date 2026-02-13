@@ -18,9 +18,9 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 # ============================================================================
 # FEATURE FLAGS: High-Stakes Claim Verification Layer
 # ============================================================================
-# Set to True to enable high-stakes claim verification
-ENABLE_HIGH_STAKES_LAYER = False  # Default: OFF (non-breaking)
-ENFORCE_HIGH_STAKES_LANGUAGE = False  # Default: OFF (non-breaking)
+# Default flags (safe - must remain OFF by default)
+DEFAULT_ENABLE_HIGH_STAKES_LAYER = False
+DEFAULT_ENFORCE_HIGH_STAKES_LANGUAGE = False
 
 from profile_extractor import (
     extract_candidate_facts,
@@ -226,22 +226,24 @@ if not api_key:
 # Debug checkbox (near top of file)
 show_debug_stage1 = st.checkbox("Show Stage 1 Debug Info", value=False, key="show_debug_stage1")
 
-# High-Stakes Layer checkbox (only shown if feature flag allows)
-enable_high_stakes_ui = False
-if ENABLE_HIGH_STAKES_LAYER:
-    enable_high_stakes_ui = st.checkbox(
-        "Enable High-Stakes Claim Layer", 
-        value=False, 
-        key="enable_high_stakes_ui",
-        help="Enable trust calibration for high-stakes claims (e.g., NeurIPS, PhD, awards)"
-    )
+# High-Stakes Layer UI toggles (live control)
+enable_high_stakes = st.checkbox(
+    "Enable High-Stakes Claim Layer",
+    value=DEFAULT_ENABLE_HIGH_STAKES_LAYER,
+    key="enable_high_stakes",
+    help="Enable trust calibration for high-stakes claims (e.g., NeurIPS, PhD, awards)"
+)
 
-# Effective enable = feature flag OR checkbox
-enable_high_stakes_effective = ENABLE_HIGH_STAKES_LAYER or enable_high_stakes_ui
+enforce_high_stakes_language = st.checkbox(
+    "Enforce cautious language for unverified high-stakes claims",
+    value=DEFAULT_ENFORCE_HIGH_STAKES_LANGUAGE,
+    key="enforce_high_stakes_language",
+    help="When enabled, unverified high-stakes claims will use cautious phrasing in generated messages"
+)
 
-# DEBUG: Show feature flag status (temporary)
-st.write("🔍 **Debug - High-Stakes Layer:**", enable_high_stakes_effective)
-st.write("🔍 **Debug - High-Stakes Enforcement:**", ENFORCE_HIGH_STAKES_LANGUAGE)
+# DEBUG: Show feature flag status
+st.write("🔍 **Debug - High-Stakes Layer:**", enable_high_stakes)
+st.write("🔍 **Debug - High-Stakes Enforcement:**", enforce_high_stakes_language)
 
 # ============================================================================
 # STAGE 1: PROFILE INPUT → EVIDENCE EXTRACTION
@@ -469,7 +471,7 @@ elif st.session_state.stage == "fact_confirmation":
             st.session_state.fact_values = {idx: fact.get("value", "") for idx, fact in enumerate(extracted_facts)}
         
         # Initialize high-stakes verification states if not exists
-        if enable_high_stakes_effective:
+        if enable_high_stakes:
             if "high_stakes_verification" not in st.session_state:
                 st.session_state.high_stakes_verification = {}
             if "high_stakes_urls" not in st.session_state:
@@ -482,20 +484,20 @@ elif st.session_state.stage == "fact_confirmation":
         
         for idx, fact in enumerate(extracted_facts):
             # Annotate fact with trust metadata if enabled
-            if enable_high_stakes_effective:
+            if enable_high_stakes:
                 fact = annotate_fact_with_trust(fact, enable_high_stakes=True)
             
             fact_text = fact.get("value", "")
             category = fact.get("category", "other")
             # Get trust flag from annotated fact
             trust_flag = fact.get("trust_flag", "normal")
-            is_high = (trust_flag == "high_stakes") if enable_high_stakes_effective else False
+            is_high = (trust_flag == "high_stakes") if enable_high_stakes else False
             
             if is_high:
                 high_stakes_count += 1
             
             # Determine column layout based on high-stakes feature
-            if enable_high_stakes_effective and is_high:
+            if enable_high_stakes and is_high:
                 col1, col2, col3, col4 = st.columns([1, 3, 2, 2])
             else:
                 col1, col2, col3 = st.columns([1, 3, 2])
@@ -517,7 +519,7 @@ elif st.session_state.stage == "fact_confirmation":
                 st.session_state.fact_values[idx] = fact_value
                 
                 # Show high-stakes warning if enabled and fact is high-stakes
-                if enable_high_stakes_effective and is_high:
+                if enable_high_stakes and is_high:
                     st.markdown("⚠️ **High-Stakes Claim — verification recommended**")
             
             with col3:
@@ -529,7 +531,7 @@ elif st.session_state.stage == "fact_confirmation":
                         st.caption(f"Source: \"{quote[:50]}...\"")
             
             # High-stakes verification UI (only if enabled and fact is high-stakes)
-            if enable_high_stakes_effective and is_high:
+            if enable_high_stakes and is_high:
                 with col4:
                     # Verification status dropdown
                     verification_key = f"verify_status_{idx}"
@@ -575,7 +577,7 @@ elif st.session_state.stage == "fact_confirmation":
             
             if approved and fact_value:
                 # Add verification metadata if high-stakes feature is enabled
-                if enable_high_stakes_effective and is_high:
+                if enable_high_stakes and is_high:
                     verification_key = f"verify_status_{idx}"
                     url_key = f"verify_url_{idx}"
                     fact_with_metadata = {
@@ -597,7 +599,7 @@ elif st.session_state.stage == "fact_confirmation":
             st.rerun()
         
         # High-stakes summary (only if enabled)
-        if enable_high_stakes_effective and high_stakes_count > 0:
+        if enable_high_stakes and high_stakes_count > 0:
             st.markdown("---")
             st.markdown("### High-Stakes Claims Summary")
             col_sum1, col_sum2, col_sum3 = st.columns(3)
@@ -635,7 +637,7 @@ elif st.session_state.stage == "fact_confirmation":
                 st.session_state.link_facts = stage2_result["link_facts"]
                 
                 # Store high-stakes metadata if enabled
-                if enable_high_stakes_effective:
+                if enable_high_stakes:
                     high_stakes_metadata = {}
                     for idx, fact in enumerate(extracted_facts):
                         fact_text = fact.get("value", "")
@@ -738,7 +740,7 @@ elif st.session_state.stage == "message_generation":
                         
                         # Get high-stakes metadata if enabled
                         high_stakes_metadata = None
-                        if enable_high_stakes_effective:
+                        if enable_high_stakes:
                             high_stakes_metadata = st.session_state.get("high_stakes_metadata", {})
                         
                         result = evaluate_scenario(
@@ -750,7 +752,7 @@ elif st.session_state.stage == "message_generation":
                             runs,
                             "STRICT" if strict_mode else "RELAXED",
                             high_stakes_metadata=high_stakes_metadata,
-                            enforce_high_stakes_language=ENFORCE_HIGH_STAKES_LANGUAGE
+                            enforce_high_stakes_language=enforce_high_stakes_language
                         )
                         all_results.append(result)
                     
