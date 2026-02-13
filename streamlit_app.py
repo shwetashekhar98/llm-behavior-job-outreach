@@ -210,6 +210,13 @@ if st.session_state.stage == "profile_input":
                         else:
                             extracted_facts = result
                         
+                        # Diagnostic: Show what we got
+                        if show_debug_stage1:
+                            st.write(f"**Debug Status:** show_debug_stage1={show_debug_stage1}, debug_info={'present' if debug_info else 'None'}, result_type={type(result).__name__}")
+                            if debug_info:
+                                st.write(f"**Debug Info Keys:** {list(debug_info.keys())}")
+                                st.write(f"**Rejected Facts Count:** {len(debug_info.get('rejected_facts', []))}")
+                        
                         # Display debug info BEFORE rerun
                         if show_debug_stage1 and debug_info:
                             st.markdown("---")
