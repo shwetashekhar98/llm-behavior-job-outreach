@@ -11,8 +11,16 @@ from groq import Groq
 from datetime import datetime
 from typing import Dict, List
 import sys
+import re
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
+
+# ============================================================================
+# FEATURE FLAGS: High-Stakes Claim Verification Layer
+# ============================================================================
+# Set to True to enable high-stakes claim verification
+ENABLE_HIGH_STAKES_LAYER = False  # Default: OFF (non-breaking)
+ENFORCE_HIGH_STAKES_LANGUAGE = False  # Default: OFF (non-breaking)
 
 from profile_extractor import (
     extract_candidate_facts,
@@ -32,6 +40,7 @@ from ui_components import (
     render_check_indicator,
     render_confidence_bar
 )
+from high_stakes import is_high_stakes, annotate_fact_with_trust
 
 
 def generate_fix_suggestions(run: Dict, scenario: Dict) -> List[str]:
@@ -216,6 +225,19 @@ if not api_key:
 
 # Debug checkbox (near top of file)
 show_debug_stage1 = st.checkbox("Show Stage 1 Debug Info", value=False, key="show_debug_stage1")
+
+# High-Stakes Layer checkbox (only shown if feature flag allows)
+enable_high_stakes_ui = False
+if ENABLE_HIGH_STAKES_LAYER:
+    enable_high_stakes_ui = st.checkbox(
+        "Enable High-Stakes Claim Layer", 
+        value=False, 
+        key="enable_high_stakes_ui",
+        help="Enable trust calibration for high-stakes claims (e.g., NeurIPS, PhD, awards)"
+    )
+
+# Effective enable = feature flag OR checkbox
+enable_high_stakes_effective = ENABLE_HIGH_STAKES_LAYER or enable_high_stakes_ui
 
 # ============================================================================
 # STAGE 1: PROFILE INPUT → EVIDENCE EXTRACTION
@@ -442,10 +464,35 @@ elif st.session_state.stage == "fact_confirmation":
             st.session_state.fact_states = {idx: True for idx in range(len(extracted_facts))}
             st.session_state.fact_values = {idx: fact.get("value", "") for idx, fact in enumerate(extracted_facts)}
         
+        # Initialize high-stakes verification states if not exists
+        if enable_high_stakes_effective:
+            if "high_stakes_verification" not in st.session_state:
+                st.session_state.high_stakes_verification = {}
+            if "high_stakes_urls" not in st.session_state:
+                st.session_state.high_stakes_urls = {}
+        
         approved_facts = []
+        high_stakes_count = 0
+        verified_count = 0
+        unverified_count = 0
         
         for idx, fact in enumerate(extracted_facts):
-            col1, col2, col3 = st.columns([1, 3, 2])
+            # Annotate fact with trust metadata if enabled
+            if enable_high_stakes_effective:
+                fact = annotate_fact_with_trust(fact, enable_high_stakes=True)
+            
+            fact_text = fact.get("value", "")
+            category = fact.get("category", "other")
+            is_high = is_high_stakes(fact_text, category) if enable_high_stakes_effective else False
+            
+            if is_high:
+                high_stakes_count += 1
+            
+            # Determine column layout based on high-stakes feature
+            if enable_high_stakes_effective and is_high:
+                col1, col2, col3, col4 = st.columns([1, 3, 2, 2])
+            else:
+                col1, col2, col3 = st.columns([1, 3, 2])
             
             with col1:
                 approved = st.checkbox(
@@ -462,6 +509,10 @@ elif st.session_state.stage == "fact_confirmation":
                     key=f"fact_value_{idx}"
                 )
                 st.session_state.fact_values[idx] = fact_value
+                
+                # Show high-stakes warning if enabled and fact is high-stakes
+                if enable_high_stakes_effective and is_high:
+                    st.warning("⚠️ High-Stakes Claim — verification recommended")
             
             with col3:
                 confidence = fact.get("confidence", 0.0)
@@ -471,8 +522,63 @@ elif st.session_state.stage == "fact_confirmation":
                     if quote:
                         st.caption(f"Source: \"{quote[:50]}...\"")
             
+            # High-stakes verification UI (only if enabled and fact is high-stakes)
+            if enable_high_stakes_effective and is_high:
+                with col4:
+                    # Verification status dropdown
+                    verification_key = f"verification_{idx}"
+                    current_status = st.session_state.high_stakes_verification.get(verification_key, "unverified")
+                    
+                    verification_status = st.selectbox(
+                        "Verification",
+                        ["unverified", "verified"],
+                        index=0 if current_status == "unverified" else 1,
+                        key=verification_key,
+                        help="Select 'verified' if you have a URL to verify this claim"
+                    )
+                    st.session_state.high_stakes_verification[verification_key] = verification_status
+                    
+                    # URL input if verified
+                    if verification_status == "verified":
+                        url_key = f"verification_url_{idx}"
+                        verification_url = st.text_input(
+                            "Verification URL",
+                            value=st.session_state.high_stakes_urls.get(url_key, ""),
+                            key=url_key,
+                            placeholder="https://...",
+                            help="Provide a URL that verifies this claim"
+                        )
+                        st.session_state.high_stakes_urls[url_key] = verification_url
+                        
+                        # Warn if verified but URL is empty
+                        if not verification_url or not verification_url.strip():
+                            st.warning("⚠️ URL required for verified claims")
+                            # Treat as unverified if URL is empty
+                            verification_status = "unverified"
+                            st.session_state.high_stakes_verification[verification_key] = "unverified"
+                        else:
+                            verified_count += 1
+                    else:
+                        unverified_count += 1
+                        # Clear URL if status changed to unverified
+                        url_key = f"verification_url_{idx}"
+                        if url_key in st.session_state.high_stakes_urls:
+                            st.session_state.high_stakes_urls[url_key] = ""
+            
             if approved and fact_value:
-                approved_facts.append(fact_value)
+                # Add verification metadata if high-stakes feature is enabled
+                if enable_high_stakes_effective and is_high:
+                    verification_key = f"verification_{idx}"
+                    url_key = f"verification_url_{idx}"
+                    fact_with_metadata = {
+                        "value": fact_value,
+                        "trust_flag": "high_stakes",
+                        "verification_status": st.session_state.high_stakes_verification.get(verification_key, "unverified"),
+                        "verification_url": st.session_state.high_stakes_urls.get(url_key, "")
+                    }
+                    approved_facts.append(fact_with_metadata)
+                else:
+                    approved_facts.append(fact_value)
         
         # Manual fact addition
         st.markdown("---")
@@ -482,23 +588,59 @@ elif st.session_state.stage == "fact_confirmation":
             approved_facts.append(manual_fact)
             st.rerun()
         
+        # High-stakes summary (only if enabled)
+        if enable_high_stakes_effective and high_stakes_count > 0:
+            st.markdown("---")
+            st.markdown("### High-Stakes Claims Summary")
+            col_sum1, col_sum2, col_sum3 = st.columns(3)
+            with col_sum1:
+                st.metric("High-Stakes Facts", high_stakes_count)
+            with col_sum2:
+                st.metric("Verified", verified_count, delta=None)
+            with col_sum3:
+                st.metric("Unverified", unverified_count, delta=None)
+        
         st.markdown("---")
         col1, col2 = st.columns(2)
         with col1:
             if st.button("✅ Confirm Facts", type="primary", use_container_width=True):
                 # Use Stage 2 preparation
+                # Extract fact values (handle dict format for high-stakes facts)
+                approved_facts_values = []
+                for fact in approved_facts:
+                    if isinstance(fact, dict):
+                        approved_facts_values.append(fact.get("value", ""))
+                    else:
+                        approved_facts_values.append(fact)
+                
                 rejected_facts = [f["value"] for idx, f in enumerate(extracted_facts) 
                                  if not st.session_state.fact_states.get(idx, False)]
-                manual_facts_list = [f for f in approved_facts if f not in [fact.get("value", "") for fact in extracted_facts]]
+                manual_facts_list = [f for f in approved_facts_values if f not in [fact.get("value", "") for fact in extracted_facts]]
                 
                 stage2_result = prepare_approved_facts(
-                    approved_facts,
+                    approved_facts_values,
                     rejected_facts,
                     manual_facts_list
                 )
                 
                 st.session_state.approved_facts = stage2_result["approved_facts_final"]
                 st.session_state.link_facts = stage2_result["link_facts"]
+                
+                # Store high-stakes metadata if enabled
+                if enable_high_stakes_effective:
+                    high_stakes_metadata = {}
+                    for idx, fact in enumerate(extracted_facts):
+                        fact_text = fact.get("value", "")
+                        category = fact.get("category", "other")
+                        if is_high_stakes(fact_text, category):
+                            verification_key = f"verification_{idx}"
+                            url_key = f"verification_url_{idx}"
+                            high_stakes_metadata[fact_text] = {
+                                "verification_status": st.session_state.high_stakes_verification.get(verification_key, "unverified"),
+                                "verification_url": st.session_state.high_stakes_urls.get(url_key, "")
+                            }
+                    st.session_state.high_stakes_metadata = high_stakes_metadata
+                
                 st.session_state.stage = "message_generation"
                 st.rerun()
         
@@ -586,6 +728,11 @@ elif st.session_state.stage == "message_generation":
                         progress_bar.progress(progress)
                         status_text.text(f"Evaluating {scenario['company']} ({idx + 1}/{len(st.session_state.scenarios)})...")
                         
+                        # Get high-stakes metadata if enabled
+                        high_stakes_metadata = None
+                        if enable_high_stakes_effective:
+                            high_stakes_metadata = st.session_state.get("high_stakes_metadata", {})
+                        
                         result = evaluate_scenario(
                             client,
                             scenario,
@@ -593,7 +740,9 @@ elif st.session_state.stage == "message_generation":
                             st.session_state.link_facts,
                             model,
                             runs,
-                            "STRICT" if strict_mode else "RELAXED"
+                            "STRICT" if strict_mode else "RELAXED",
+                            high_stakes_metadata=high_stakes_metadata,
+                            enforce_high_stakes_language=ENFORCE_HIGH_STAKES_LANGUAGE
                         )
                         all_results.append(result)
                     

@@ -3,7 +3,8 @@ Evaluation runner implementing STAGE 3: Message Generation + Reliability Evaluat
 """
 
 import re
-from typing import Dict, List
+import json
+from typing import Dict, List, Optional
 from groq import Groq
 from validation_engine import run_all_checks
 
@@ -34,7 +35,9 @@ def generate_message_with_word_limit(
     link_facts: Dict,
     model: str,
     run_idx: int,
-    max_attempts: int = 3
+    max_attempts: int = 3,
+    high_stakes_metadata: Optional[Dict] = None,
+    enforce_high_stakes_language: bool = False
 ) -> Dict:
     """
     STAGE 3: Generate message with strict word limit enforcement.
@@ -88,6 +91,10 @@ Channel: {channel}
 Tone: {tone}
 Maximum words: {max_words} (STRICT - count words and stay under)
 Approved facts ONLY: {', '.join(approved_facts_final) if approved_facts_final else 'None provided'}
+
+{('HIGH-STAKES LANGUAGE ENFORCEMENT:\n' +
+  'For unverified high-stakes claims, use cautious phrasing like "According to my profile, ..." or "As noted in my background, ..."\n' +
+  f'High-stakes metadata: {json.dumps(high_stakes_metadata, indent=2)}') if (enforce_high_stakes_language and high_stakes_metadata) else ''}
 
 Available links:
 - GitHub: {link_facts.get('github', 'Not available')}
@@ -195,7 +202,9 @@ def evaluate_scenario(
     link_facts: Dict,
     model: str,
     runs: int,
-    evaluation_mode: str = "RELAXED"
+    evaluation_mode: str = "RELAXED",
+    high_stakes_metadata: Optional[Dict] = None,
+    enforce_high_stakes_language: bool = False
 ) -> Dict:
     """
     STAGE 3: Evaluate a single scenario (generation + evaluation).
@@ -210,7 +219,9 @@ def evaluate_scenario(
     for run_idx in range(runs):
         # STAGE 3: Generate message
         gen_result = generate_message_with_word_limit(
-            client, scenario, approved_facts_final, link_facts, model, run_idx
+            client, scenario, approved_facts_final, link_facts, model, run_idx,
+            high_stakes_metadata=high_stakes_metadata,
+            enforce_high_stakes_language=enforce_high_stakes_language
         )
         
         if gen_result["error"]:
