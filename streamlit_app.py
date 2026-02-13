@@ -217,18 +217,37 @@ if st.session_state.stage == "profile_input":
                             
                             # Raw LLM output
                             st.subheader("Stage 1 Raw LLM Output")
+                            raw_facts = debug_info.get("raw_candidate_facts", [])
+                            raw_warnings = debug_info.get("raw_warnings", [])
                             st.json({
-                                "candidate_facts": debug_info.get("raw_candidate_facts", []),
-                                "warnings": debug_info.get("raw_warnings", [])
+                                "candidate_facts": raw_facts,
+                                "warnings": raw_warnings,
+                                "total_raw": len(raw_facts)
                             })
                             
                             # Accepted facts
                             st.subheader("Stage 1 Accepted Facts")
-                            st.json(debug_info.get("accepted_facts", []))
+                            accepted = debug_info.get("accepted_facts", [])
+                            st.json(accepted)
+                            st.caption(f"Total accepted: {len(accepted)}")
                             
                             # Rejected facts with reasons
                             st.subheader("Stage 1 Rejected Facts + Reasons")
-                            st.json(debug_info.get("rejected_facts", []))
+                            rejected = debug_info.get("rejected_facts", [])
+                            if rejected:
+                                st.json(rejected)
+                                st.caption(f"Total rejected: {len(rejected)}")
+                                # Show summary of rejection reasons
+                                reason_counts = {}
+                                for item in rejected:
+                                    for reason in item.get("rejection_reasons", []):
+                                        reason_counts[reason] = reason_counts.get(reason, 0) + 1
+                                if reason_counts:
+                                    st.write("**Rejection reason summary:**")
+                                    for reason, count in reason_counts.items():
+                                        st.write(f"- {reason}: {count}")
+                            else:
+                                st.info("No facts were rejected.")
                             
                             st.markdown("---")
                         

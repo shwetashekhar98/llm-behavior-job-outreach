@@ -597,8 +597,15 @@ def extract_facts_with_evidence(
     
     # Return debug info if requested (for UI display)
     if show_debug and "debug_info" in stage1_result:
+        debug_info = stage1_result["debug_info"]
+        # Ensure rejected_facts have rejection_reasons
+        if "rejected_facts" in debug_info:
+            # Verify rejected_facts structure
+            for rejected in debug_info["rejected_facts"]:
+                if "rejection_reasons" not in rejected:
+                    rejected["rejection_reasons"] = ["unknown_reason"]
         # Return tuple: (facts_list, debug_info_dict)
-        return (facts_for_ui, stage1_result["debug_info"])
+        return (facts_for_ui, debug_info)
     
     return facts_for_ui
 
