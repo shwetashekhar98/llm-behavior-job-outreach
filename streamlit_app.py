@@ -161,6 +161,9 @@ if not api_key:
     st.warning("⚠️ Enter your Groq API key in the sidebar to begin")
     st.stop()
 
+# Debug checkbox (near top of file)
+show_debug_stage1 = st.checkbox("Show Stage 1 Debug Info", value=False, key="show_debug_stage1")
+
 # ============================================================================
 # STAGE 1: PROFILE INPUT → EVIDENCE EXTRACTION
 # ============================================================================
@@ -168,9 +171,6 @@ if not api_key:
 if st.session_state.stage == "profile_input":
     st.markdown("## 📝 Stage 1: Profile Input & Evidence Extraction")
     st.markdown("---")
-    
-    # Debug checkbox
-    show_debug_stage1 = st.checkbox("Show Stage 1 Debug Info", key="show_debug_stage1")
     
     extracted_facts = []
     
@@ -204,31 +204,10 @@ if st.session_state.stage == "profile_input":
                         )
                         
                         # Extract debug info if available (returns tuple if debug enabled)
-                        debug_info = None
                         if show_debug_stage1 and isinstance(result, tuple) and len(result) == 2:
-                            extracted_facts, debug_info = result
-                            st.session_state.stage1_debug_info = debug_info
+                            extracted_facts, _ = result
                         else:
                             extracted_facts = result
-                        
-                        # Display debug info if requested
-                        if show_debug_stage1 and debug_info:
-                            st.markdown("---")
-                            st.subheader("🔍 Stage 1 Debug Information")
-                            
-                            # Raw LLM output
-                            st.subheader("Stage 1 Raw LLM Output")
-                            st.json(debug_info.get("raw_candidate_facts", []))
-                            
-                            # Accepted facts
-                            st.subheader("Stage 1 Accepted Facts")
-                            st.json(debug_info.get("accepted_facts", []))
-                            
-                            # Rejected facts
-                            st.subheader("Stage 1 Rejected Facts")
-                            st.json(debug_info.get("rejected_facts", []))
-                            
-                            st.markdown("---")
                         
                         st.session_state.extracted_facts = extracted_facts
                         st.session_state.source_text = profile_text

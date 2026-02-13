@@ -268,18 +268,27 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
         result_text = response.choices[0].message.content or "{}"
         result_json = json.loads(result_text)
         
-        extracted_facts = result_json.get("candidate_facts", [])
-        extraction_warnings = result_json.get("warnings", [])
-        warnings.extend(extraction_warnings)
+        # Extract raw LLM response
+        raw_candidate_facts = result_json.get("candidate_facts", [])
+        raw_warnings = result_json.get("warnings", [])
+        warnings.extend(raw_warnings)
         
         # ============================================================================
-        # DEBUG LOGGING: Store raw LLM response for UI display
+        # DEBUG: Show raw LLM output (before filtering)
+        # ============================================================================
+        if show_debug:
+            import streamlit as st
+            st.subheader("Stage 1 Raw LLM Output")
+            st.json({"candidate_facts": raw_candidate_facts, "warnings": raw_warnings})
+        
+        # ============================================================================
+        # DEBUG LOGGING: Store raw LLM response for file logging (if env var set)
         # ============================================================================
         DEBUG_STAGE1 = os.getenv("DEBUG_STAGE1", "False").lower() == "true"
         
         # Store debug info for UI display
         debug_info = {
-            "raw_candidate_facts": extracted_facts.copy() if show_debug else [],
+            "raw_candidate_facts": raw_candidate_facts.copy() if show_debug else [],
             "rejected_facts": [],
             "accepted_facts": []
         }
@@ -293,9 +302,9 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
             raw_debug = {
                 "run_id": run_id,
                 "timestamp": datetime.now().isoformat(),
-                "raw_candidate_facts": extracted_facts,
-                "extraction_warnings": extraction_warnings,
-                "total_raw_facts": len(extracted_facts)
+                "raw_candidate_facts": raw_candidate_facts,
+                "extraction_warnings": raw_warnings,
+                "total_raw_facts": len(raw_candidate_facts)
             }
             
             raw_debug_file = debug_dir / f"debug_stage1_raw_{run_id}.json"
@@ -303,56 +312,86 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
                 json.dump(raw_debug, f, indent=2)
             
             print(f"[DEBUG_STAGE1] Raw LLM response saved to: {raw_debug_file}")
-            print(f"[DEBUG_STAGE1] Total raw candidate_facts from LLM: {len(extracted_facts)}")
-            for idx, fact in enumerate(extracted_facts):
+            print(f"[DEBUG_STAGE1] Total raw candidate_facts from LLM: {len(raw_candidate_facts)}")
+            for idx, fact in enumerate(raw_candidate_facts):
                 print(f"[DEBUG_STAGE1] Raw fact {idx+1}: {fact.get('fact', '')[:50]}... (category: {fact.get('category', 'unknown')}, confidence: {fact.get('confidence', 0)})")
         
         # Validate and filter facts
         seen_facts = set()
         validated_facts = []
-        rejected_facts = []  # DEBUG: Track rejected facts
+        rejected_facts = []  # DEBUG: Track rejected facts for file logging
         
-        for fact_data in extracted_facts:
-            fact_text = fact_data.get("fact", "").strip()
-            evidence = fact_data.get("evidence", fact_text).strip()
+        # DEBUG: Collect accepted and rejected for UI display
+        accepted = []
+        rejected = []
+        
+        for fact_data in raw_candidate_facts:
+            fact_text = (fact_data.get("fact") or "").strip()
+            evidence = (fact_data.get("evidence") or fact_text).strip()
             confidence = fact_data.get("confidence", 0.5)
             category = fact_data.get("category", "other")
             
-            rejection_reasons = []  # DEBUG: Track why this fact was rejected
+            reasons = []  # Collect rejection reasons
+            
+            # Check confidence
+            if confidence < 0.50:
+                reasons.append("confidence_below_0.50")
+            
+            # Check fact length
+            if len(fact_text) < 10:
+                reasons.append("fact_too_short")
+            
+            # Check if evidence exists in source text
+            if evidence and evidence.lower() not in combined_text.lower():
+                reasons.append("evidence_not_substring_match")
             
             # Validate fact completeness
             if not is_complete_fact(fact_text):
-                rejection_reasons.append("is_complete_fact check failed")
-                if show_debug or DEBUG_STAGE1:
-                    rejected_fact_entry = {
-                        "fact": fact_text,
-                        "category": category,
-                        "confidence": confidence,
-                        "evidence": evidence,
-                        "rejection_reasons": rejection_reasons.copy()
-                    }
-                    if show_debug:
-                        debug_info["rejected_facts"].append(rejected_fact_entry)
-                    if DEBUG_STAGE1:
-                        rejected_facts.append(rejected_fact_entry)
+                reasons.append("is_complete_fact_check_failed")
+            
+            # Check for duplicates
+            fact_lower = fact_text.lower()
+            if fact_lower in seen_facts:
+                reasons.append("duplicate_fact")
+            
+            # If any reasons, reject; otherwise accept
+            if reasons:
+                rejected_item = {**fact_data, "rejection_reasons": reasons}
+                rejected.append(rejected_item)
+                if DEBUG_STAGE1:
+                    rejected_facts.append(rejected_item)
                 continue
             
-            # Check confidence range
-            if confidence < 0.50:
-                rejection_reasons.append(f"confidence too low: {confidence} < 0.50")
-                if show_debug or DEBUG_STAGE1:
-                    rejected_fact_entry = {
-                        "fact": fact_text,
-                        "category": category,
-                        "confidence": confidence,
-                        "evidence": evidence,
-                        "rejection_reasons": rejection_reasons.copy()
-                    }
-                    if show_debug:
-                        debug_info["rejected_facts"].append(rejected_fact_entry)
-                    if DEBUG_STAGE1:
-                        rejected_facts.append(rejected_fact_entry)
-                continue
+            # Fact passed all checks
+            seen_facts.add(fact_lower)
+            
+            # Clamp confidence if needed
+            if confidence > 0.95:
+                confidence = 0.95
+            
+            # Check evidence length
+            if len(evidence) > 160:
+                evidence = evidence[:157] + "..."
+            
+            # Validate category
+            valid_categories = ["education", "work", "impact", "skills", "projects", 
+                              "awards", "links", "location", "other"]
+            if category not in valid_categories:
+                category = "other"
+            
+            # Add to accepted
+            accepted_item = {
+                "fact": fact_text,
+                "category": category,
+                "evidence": evidence,
+                "confidence": confidence
+            }
+            accepted.append(accepted_item)
+            validated_facts.append(accepted_item)
+            
+            # DEBUG: Store accepted fact for file logging
+            if DEBUG_STAGE1:
+                debug_info["accepted_facts"].append(accepted_item)
             
             if confidence > 0.95:
                 confidence = 0.95  # Clamp to max
@@ -417,7 +456,18 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
                 print(f"[DEBUG_STAGE1] ✓ Accepted fact: {fact_text[:50]}... (category: {category}, confidence: {confidence})")
         
         # ============================================================================
-        # DEBUG LOGGING: Dump rejected and accepted facts
+        # DEBUG: Show accepted and rejected facts in UI
+        # ============================================================================
+        if show_debug:
+            import streamlit as st
+            st.subheader("Stage 1 Accepted Facts")
+            st.json(accepted)
+            
+            st.subheader("Stage 1 Rejected Facts + Reasons")
+            st.json(rejected)
+        
+        # ============================================================================
+        # DEBUG LOGGING: Dump rejected and accepted facts to files (if env var set)
         # ============================================================================
         if DEBUG_STAGE1:
             # Save rejected facts
@@ -434,7 +484,7 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
             print(f"[DEBUG_STAGE1] Rejected facts saved to: {rejected_debug_file}")
             print(f"[DEBUG_STAGE1] Total rejected facts: {len(rejected_facts)}")
             for idx, rejected in enumerate(rejected_facts):
-                print(f"[DEBUG_STAGE1] Rejected {idx+1}: {rejected['fact'][:50]}... Reasons: {', '.join(rejected['rejection_reasons'])}")
+                print(f"[DEBUG_STAGE1] Rejected {idx+1}: {rejected.get('fact', '')[:50]}... Reasons: {', '.join(rejected.get('rejection_reasons', []))}")
             
             # Save accepted facts
             accepted_debug = {
@@ -457,7 +507,7 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
             
             print(f"[DEBUG_STAGE1] Accepted facts saved to: {accepted_debug_file}")
             print(f"[DEBUG_STAGE1] Total accepted facts: {len(validated_facts)}")
-            print(f"[DEBUG_STAGE1] Summary: {len(extracted_facts)} raw → {len(validated_facts)} accepted → {len(rejected_facts)} rejected")
+            print(f"[DEBUG_STAGE1] Summary: {len(raw_candidate_facts)} raw → {len(validated_facts)} accepted → {len(rejected_facts)} rejected")
         
         # Merge with URL facts (avoid duplicates)
         url_fact_texts = {f["fact"].lower() for f in url_facts}
