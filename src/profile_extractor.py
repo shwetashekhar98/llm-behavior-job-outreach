@@ -861,9 +861,22 @@ def extract_facts_with_evidence(
     """
     stage1_result = extract_candidate_facts(profile_input, api_key, model, show_debug)
     
+    # Get debug info if available
+    debug_info = stage1_result.get("debug_info", {}) if show_debug else {}
+    
+    # Use accepted_facts from debug_info if available (more reliable than candidate_facts)
+    # Otherwise fall back to candidate_facts from stage1_result
+    source_facts = []
+    if show_debug and "accepted_facts" in debug_info and len(debug_info["accepted_facts"]) > 0:
+        # Use accepted facts from validation (these are the ones that passed all checks)
+        source_facts = debug_info["accepted_facts"]
+    else:
+        # Fall back to candidate_facts (for non-debug mode or if accepted_facts not available)
+        source_facts = stage1_result.get("candidate_facts", [])
+    
     # Convert to UI format - PRESERVE FACT-EVIDENCE PAIRING
     facts_for_ui = []
-    for idx, fact_data in enumerate(stage1_result["candidate_facts"]):
+    for idx, fact_data in enumerate(source_facts):
         # CRITICAL: Use fact_data directly - don't extract separately
         fact_text = fact_data.get("fact", "")
         evidence = fact_data.get("evidence", "")
@@ -893,8 +906,7 @@ def extract_facts_with_evidence(
         })
     
     # Return debug info if requested (for UI display)
-    if show_debug and "debug_info" in stage1_result:
-        debug_info = stage1_result["debug_info"]
+    if show_debug and debug_info:
         # Ensure rejected_facts have rejection_reasons
         if "rejected_facts" in debug_info:
             # Verify rejected_facts structure
