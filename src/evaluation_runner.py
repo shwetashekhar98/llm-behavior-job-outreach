@@ -234,7 +234,8 @@ def evaluate_scenario(
                 approved_facts_final,
                 strict_mode,
                 scenario.get("company", ""),
-                scenario.get("target_role", "")
+                scenario.get("target_role", ""),
+                link_facts=link_facts
             )
         
         results.append({

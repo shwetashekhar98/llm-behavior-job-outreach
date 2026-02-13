@@ -4,7 +4,7 @@ PHASE 4: Evaluation with fabrication and unsupported claims detection.
 """
 
 import re
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 
 def within_word_limit(text: str, max_words: int) -> bool:
@@ -15,15 +15,138 @@ def within_word_limit(text: str, max_words: int) -> bool:
     return word_count <= max_words
 
 
-def must_include_check(text: str, must_include: List[str], strict_mode: bool = False) -> Tuple[bool, List[str]]:
+def extract_urls(text: str) -> List[str]:
+    """Extract all URLs from text."""
+    url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
+    return re.findall(url_pattern, text, re.IGNORECASE)
+
+
+def contains_github_url(message: str, approved_facts: List[str], link_facts: Optional[Dict] = None) -> bool:
     """
-    Check if text contains all required items.
+    Check if message contains GitHub URL semantically.
+    Accepts: github.com, GitHub URL from approved facts, or link_facts.
+    """
+    message_lower = message.lower()
     
-    STRICT mode: Exact trigger phrases required
-    RELAXED mode: Smart matching with synonyms
+    # Check for github.com in message
+    if "github.com" in message_lower:
+        return True
+    
+    # Check if any approved fact contains GitHub URL
+    for fact in approved_facts:
+        if "github.com" in fact.lower() or "github" in fact.lower() and "http" in fact.lower():
+            # Check if this GitHub URL appears in message
+            urls_in_fact = extract_urls(fact)
+            urls_in_message = extract_urls(message)
+            if any(github_url in message for github_url in urls_in_fact if "github" in github_url.lower()):
+                return True
+    
+    # Check link_facts
+    if link_facts and link_facts.get("github"):
+        github_url = link_facts["github"]
+        if github_url.lower() in message_lower:
+            return True
+    
+    return False
+
+
+def contains_portfolio_url(message: str, approved_facts: List[str], link_facts: Optional[Dict] = None) -> bool:
+    """
+    Check if message contains portfolio URL semantically.
+    Accepts: portfolio URL from approved facts, any non-GitHub website URL,
+    or "profile link:" + URL pattern.
+    """
+    message_lower = message.lower()
+    
+    # Check for "profile link:" pattern
+    if re.search(r'profile\s+link\s*:?\s*https?://', message_lower):
+        return True
+    
+    # Extract all URLs from message
+    urls_in_message = extract_urls(message)
+    
+    # Check if any URL is NOT a GitHub URL (treat as portfolio)
+    for url in urls_in_message:
+        url_lower = url.lower()
+        # If it's not GitHub, LinkedIn, or a common social platform, treat as portfolio
+        if "github.com" not in url_lower and "linkedin.com" not in url_lower:
+            # Check if this URL matches any approved fact
+            for fact in approved_facts:
+                if url in fact or url_lower in fact.lower():
+                    return True
+            # Also accept if it's in link_facts
+            if link_facts:
+                portfolio_url = link_facts.get("portfolio", "")
+                if portfolio_url and portfolio_url.lower() in url_lower:
+                    return True
+                # Check other_links
+                for other_link in link_facts.get("other_links", []):
+                    if other_link.lower() in url_lower:
+                        return True
+    
+    # Check link_facts directly
+    if link_facts:
+        portfolio_url = link_facts.get("portfolio", "")
+        if portfolio_url:
+            # Check if portfolio URL domain appears in message
+            if portfolio_url.lower() in message_lower:
+                return True
+            # Extract domain from portfolio URL
+            domain_match = re.search(r'https?://([^/]+)', portfolio_url)
+            if domain_match:
+                domain = domain_match.group(1)
+                if domain.lower() in message_lower:
+                    return True
+    
+    return False
+
+
+def contains_chat_ask(message: str) -> bool:
+    """
+    Check if message contains a chat/call request semantically.
+    Accepts: "15-minute chat", "15 minute chat", "quick chat", "brief chat",
+    "schedule", "call", "connect", "chat" (case-insensitive).
+    """
+    message_lower = message.lower()
+    
+    chat_phrases = [
+        "15-minute chat", "15 minute chat", "quick chat", "brief chat",
+        "schedule", "call", "connect", "chat", "conversation"
+    ]
+    
+    return any(phrase in message_lower for phrase in chat_phrases)
+
+
+def must_include_check(
+    text: str, 
+    must_include: List[str], 
+    strict_mode: bool = False,
+    approved_facts: Optional[List[str]] = None,
+    link_facts: Optional[Dict] = None
+) -> Tuple[bool, List[str]]:
+    """
+    Check if text contains all required items using semantic matching.
+    
+    Semantic rules:
+    - "GitHub": satisfied if message contains github.com OR GitHub URL from approved facts
+    - "Portfolio": satisfied if message contains portfolio URL OR "profile link:" + URL OR any non-GitHub website URL
+    - "Ask for chat": satisfied if message contains chat/call/schedule phrases
+    
+    Args:
+        text: Message text to check
+        must_include: List of required items
+        strict_mode: Whether to use strict matching (currently same as relaxed for semantic checks)
+        approved_facts: List of approved fact strings (may contain URLs)
+        link_facts: Dict with 'github', 'portfolio', 'linkedin', 'other_links' keys
+    
+    Returns:
+        Tuple of (all_present: bool, missing_items: List[str])
     """
     if not text or not must_include:
         return (len(must_include) == 0, must_include.copy())
+    
+    approved_facts = approved_facts or []
+    link_facts = link_facts or {}
     
     text_lower = text.lower()
     missing = []
@@ -31,34 +154,41 @@ def must_include_check(text: str, must_include: List[str], strict_mode: bool = F
     for item in must_include:
         item_lower = item.lower()
         
-        if strict_mode:
-            # STRICT: Exact phrase match
-            if item_lower == "ask for chat" or item_lower == "request chat":
-                # Must contain explicit ask + timebox OR unambiguous scheduling ask
-                has_explicit_ask = any(phrase in text_lower for phrase in [
-                    "15-minute chat", "quick call", "15 minute", "schedule a call",
-                    "schedule a chat", "would you be open", "are you available"
-                ])
-                if not has_explicit_ask:
-                    missing.append(item)
-            elif item_lower not in text_lower:
+        # GitHub semantic check
+        if item_lower in ["github", "mention_github"]:
+            if not contains_github_url(text, approved_facts, link_facts):
                 missing.append(item)
+        
+        # Portfolio semantic check
+        elif item_lower in ["portfolio", "mention_portfolio"]:
+            if not contains_portfolio_url(text, approved_facts, link_facts):
+                missing.append(item)
+        
+        # LinkedIn semantic check (similar to GitHub)
+        elif item_lower in ["linkedin", "mention_linkedin"]:
+            if "linkedin.com" not in text_lower:
+                # Check approved facts and link_facts
+                found = False
+                for fact in approved_facts:
+                    if "linkedin.com" in fact.lower() or ("linkedin" in fact.lower() and "http" in fact.lower()):
+                        if any(linkedin_url in text for linkedin_url in extract_urls(fact) if "linkedin" in linkedin_url.lower()):
+                            found = True
+                            break
+                if not found and link_facts.get("linkedin"):
+                    if link_facts["linkedin"].lower() in text_lower:
+                        found = True
+                if not found:
+                    missing.append(item)
+        
+        # Chat request semantic check
+        elif item_lower in ["ask for chat", "request chat", "request_chat", "chat request"]:
+            if not contains_chat_ask(text):
+                missing.append(item)
+        
+        # Fallback: literal match for other items
         else:
-            # RELAXED: Smart matching
-            if item_lower in ["github", "portfolio", "linkedin"]:
-                if item_lower not in text_lower:
-                    missing.append(item)
-            elif item_lower in ["ask for chat", "request chat", "chat request"]:
-                # Accept: chat, call, connect, schedule, 15-minute, quick conversation
-                chat_phrases = [
-                    "chat", "call", "connect", "schedule", "15-minute", 
-                    "quick conversation", "conversation", "schedule time"
-                ]
-                if not any(phrase in text_lower for phrase in chat_phrases):
-                    missing.append(item)
-            else:
-                if item_lower not in text_lower:
-                    missing.append(item)
+            if item_lower not in text_lower:
+                missing.append(item)
     
     return (len(missing) == 0, missing)
 
@@ -257,7 +387,8 @@ def run_all_checks(
     allowed_facts: List[str],
     strict_mode: bool = False,
     company: str = "",
-    target_role: str = ""
+    target_role: str = "",
+    link_facts: Optional[Dict] = None
 ) -> Dict:
     """
     PHASE 4: Evaluation
@@ -267,7 +398,11 @@ def run_all_checks(
         Dictionary with check results and failure_reasons
     """
     word_limit_ok = within_word_limit(text, max_words)
-    must_include_ok, missing_items = must_include_check(text, must_include, strict_mode)
+    must_include_ok, missing_items = must_include_check(
+        text, must_include, strict_mode, 
+        approved_facts=allowed_facts,
+        link_facts=link_facts
+    )
     tone_ok, tone_issues = tone_professional(text, strict_mode)
     no_fabrication, fabrications = detects_fabrication(text, allowed_facts, company, target_role)
     no_unsupported, unsupported = detects_unsupported_claims(text, allowed_facts, strict_mode)
