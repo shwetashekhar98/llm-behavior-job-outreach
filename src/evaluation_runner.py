@@ -324,6 +324,26 @@ def evaluate_scenario(
                     check_result["high_stakes_enforcement_violation"] = False
             else:
                 check_result["high_stakes_enforcement_violation"] = False
+            
+            # PART 5: Track enforcement behavior and language quality
+            # Extract high-stakes facts from approved_facts_final
+            high_stakes_facts_list = []
+            if high_stakes_metadata:
+                high_stakes_facts_list = list(high_stakes_metadata.keys())
+            
+            enforcement_behavior = analyze_enforcement_behavior(
+                gen_result["message"],
+                approved_facts_final,
+                high_stakes_facts_list,
+                conversion_log,
+                enforce_high_stakes_language
+            )
+            
+            language_quality = analyze_language_quality(gen_result["message"])
+            
+            # Add to check_result for tracking
+            check_result["enforcement_behavior"] = enforcement_behavior
+            check_result["language_quality"] = language_quality
         
         results.append({
             "run": run_idx + 1,
