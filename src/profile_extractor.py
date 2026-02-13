@@ -139,7 +139,8 @@ def extract_urls(text: str) -> List[Dict]:
 def extract_candidate_facts(
     profile_input: Dict,
     api_key: str,
-    model: str = "llama-3.1-8b-instant"
+    model: str = "llama-3.1-8b-instant",
+    show_debug: bool = False
 ) -> Dict:
     """
     STAGE 1: Extract candidate facts with evidence.
@@ -272,9 +273,16 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
         warnings.extend(extraction_warnings)
         
         # ============================================================================
-        # DEBUG LOGGING: Dump raw LLM response
+        # DEBUG LOGGING: Store raw LLM response for UI display
         # ============================================================================
         DEBUG_STAGE1 = os.getenv("DEBUG_STAGE1", "False").lower() == "true"
+        
+        # Store debug info for UI display
+        debug_info = {
+            "raw_candidate_facts": extracted_facts.copy() if show_debug else [],
+            "rejected_facts": [],
+            "accepted_facts": []
+        }
         
         if DEBUG_STAGE1:
             run_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -315,27 +323,35 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
             # Validate fact completeness
             if not is_complete_fact(fact_text):
                 rejection_reasons.append("is_complete_fact check failed")
-                if DEBUG_STAGE1:
-                    rejected_facts.append({
+                if show_debug or DEBUG_STAGE1:
+                    rejected_fact_entry = {
                         "fact": fact_text,
                         "category": category,
                         "confidence": confidence,
                         "evidence": evidence,
-                        "rejection_reasons": rejection_reasons
-                    })
+                        "rejection_reasons": rejection_reasons.copy()
+                    }
+                    if show_debug:
+                        debug_info["rejected_facts"].append(rejected_fact_entry)
+                    if DEBUG_STAGE1:
+                        rejected_facts.append(rejected_fact_entry)
                 continue
             
             # Check confidence range
             if confidence < 0.50:
                 rejection_reasons.append(f"confidence too low: {confidence} < 0.50")
-                if DEBUG_STAGE1:
-                    rejected_facts.append({
+                if show_debug or DEBUG_STAGE1:
+                    rejected_fact_entry = {
                         "fact": fact_text,
                         "category": category,
                         "confidence": confidence,
                         "evidence": evidence,
-                        "rejection_reasons": rejection_reasons
-                    })
+                        "rejection_reasons": rejection_reasons.copy()
+                    }
+                    if show_debug:
+                        debug_info["rejected_facts"].append(rejected_fact_entry)
+                    if DEBUG_STAGE1:
+                        rejected_facts.append(rejected_fact_entry)
                 continue
             
             if confidence > 0.95:
@@ -386,6 +402,15 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
                 "evidence": evidence,
                 "confidence": confidence
             })
+            
+            # DEBUG: Store accepted fact for UI
+            if show_debug:
+                debug_info["accepted_facts"].append({
+                    "fact": fact_text,
+                    "category": category,
+                    "confidence": confidence,
+                    "evidence": evidence
+                })
             
             # DEBUG: Log accepted fact
             if DEBUG_STAGE1:
@@ -443,12 +468,18 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
         if len(candidate_facts) == 0:
             warnings.append("No valid facts extracted. Input may be too fragmented or incomplete.")
         
-        return {
+        result = {
             "stage": 1,
             "profile_parse_quality": parse_quality,
             "candidate_facts": candidate_facts,
             "warnings": warnings
         }
+        
+        # Add debug info if requested
+        if show_debug:
+            result["debug_info"] = debug_info
+        
+        return result
     
     except Exception as e:
         warnings.append(f"Extraction error: {str(e)}")
@@ -559,12 +590,13 @@ def prepare_approved_facts(
 def extract_facts_with_evidence(
     profile_input: Dict,
     api_key: str,
-    model: str = "llama-3.1-8b-instant"
+    model: str = "llama-3.1-8b-instant",
+    show_debug: bool = False
 ) -> List[Dict]:
     """
     Legacy wrapper that returns facts in UI format.
     """
-    stage1_result = extract_candidate_facts(profile_input, api_key, model)
+    stage1_result = extract_candidate_facts(profile_input, api_key, model, show_debug)
     
     # Convert to UI format
     facts_for_ui = []
@@ -579,7 +611,13 @@ def extract_facts_with_evidence(
             "evidence_source": "extracted"
         })
     
-    return facts_for_ui
+    # Return debug info if available (UI will handle storing in session state)
+    result = facts_for_ui
+    if show_debug and "debug_info" in stage1_result:
+        # Attach debug info as attribute (UI will extract it)
+        result._debug_info = stage1_result["debug_info"]
+    
+    return result
 
 
 def extract_structured_profile(form_data: Dict) -> List[Dict]:

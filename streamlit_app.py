@@ -169,6 +169,9 @@ if st.session_state.stage == "profile_input":
     st.markdown("## 📝 Stage 1: Profile Input & Evidence Extraction")
     st.markdown("---")
     
+    # Debug checkbox
+    show_debug_stage1 = st.checkbox("Show Stage 1 Debug Info", key="show_debug_stage1")
+    
     extracted_facts = []
     
     if profile_mode == "Paste Resume / LinkedIn":
@@ -196,8 +199,35 @@ if st.session_state.stage == "profile_input":
                         extracted_facts = extract_facts_with_evidence(
                             profile_input,
                             api_key,
-                            model
+                            model,
+                            show_debug_stage1
                         )
+                        
+                        # Extract debug info if available
+                        debug_info = None
+                        if show_debug_stage1 and hasattr(extracted_facts, '_debug_info'):
+                            debug_info = extracted_facts._debug_info
+                            st.session_state.stage1_debug_info = debug_info
+                        
+                        # Display debug info if requested
+                        if show_debug_stage1 and debug_info:
+                            st.markdown("---")
+                            st.subheader("🔍 Stage 1 Debug Information")
+                            
+                            # Raw LLM output
+                            st.subheader("Stage 1 Raw LLM Output")
+                            st.json(debug_info.get("raw_candidate_facts", []))
+                            
+                            # Accepted facts
+                            st.subheader("Stage 1 Accepted Facts")
+                            st.json(debug_info.get("accepted_facts", []))
+                            
+                            # Rejected facts
+                            st.subheader("Stage 1 Rejected Facts")
+                            st.json(debug_info.get("rejected_facts", []))
+                            
+                            st.markdown("---")
+                        
                         st.session_state.extracted_facts = extracted_facts
                         st.session_state.source_text = profile_text
                         st.session_state.stage = "fact_confirmation"
