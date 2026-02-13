@@ -392,68 +392,6 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
             # DEBUG: Store accepted fact for file logging
             if DEBUG_STAGE1:
                 debug_info["accepted_facts"].append(accepted_item)
-            
-            if confidence > 0.95:
-                confidence = 0.95  # Clamp to max
-            
-            # Check evidence length
-            if len(evidence) > 160:
-                evidence = evidence[:157] + "..."
-            
-            # Check if evidence exists in source text
-            if evidence.lower() not in combined_text.lower():
-                rejection_reasons.append(f"evidence quote not found in source text")
-                if DEBUG_STAGE1:
-                    rejected_facts.append({
-                        "fact": fact_text,
-                        "category": category,
-                        "confidence": confidence,
-                        "evidence": evidence,
-                        "rejection_reasons": rejection_reasons
-                    })
-                continue
-            
-            # Dedupe by semantic similarity (simple: exact match)
-            fact_lower = fact_text.lower()
-            if fact_lower in seen_facts:
-                rejection_reasons.append("duplicate fact (exact match)")
-                if DEBUG_STAGE1:
-                    rejected_facts.append({
-                        "fact": fact_text,
-                        "category": category,
-                        "confidence": confidence,
-                        "evidence": evidence,
-                        "rejection_reasons": rejection_reasons
-                    })
-                continue
-            seen_facts.add(fact_lower)
-            
-            # Validate category
-            valid_categories = ["education", "work", "impact", "skills", "projects", 
-                              "awards", "links", "location", "other"]
-            if category not in valid_categories:
-                category = "other"
-            
-            # Fact passed all validations
-            validated_facts.append({
-                "fact": fact_text,
-                "category": category,
-                "evidence": evidence,
-                "confidence": confidence
-            })
-            
-            # DEBUG: Store accepted fact for UI
-            if show_debug:
-                debug_info["accepted_facts"].append({
-                    "fact": fact_text,
-                    "category": category,
-                    "confidence": confidence,
-                    "evidence": evidence
-                })
-            
-            # DEBUG: Log accepted fact
-            if DEBUG_STAGE1:
-                print(f"[DEBUG_STAGE1] ✓ Accepted fact: {fact_text[:50]}... (category: {category}, confidence: {confidence})")
         
         # ============================================================================
         # DEBUG: Show accepted and rejected facts in UI
