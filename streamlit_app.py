@@ -474,30 +474,42 @@ elif st.session_state.stage == "fact_confirmation":
         extracted_facts = st.session_state.extracted_facts
         source_text = st.session_state.get("source_text", "")
         
-        st.markdown("### Review and Approve Facts")
-        st.caption("Only approved facts will be used for message generation. Review each fact and its source evidence.")
-        
-        # Fact confirmation table
-        st.markdown("#### Extracted Facts")
-        
-        # Initialize fact states if not exists
-        if "fact_states" not in st.session_state:
-            st.session_state.fact_states = {idx: True for idx in range(len(extracted_facts))}
-            st.session_state.fact_values = {idx: fact.get("value", "") for idx, fact in enumerate(extracted_facts)}
-        
-        # Initialize high-stakes verification states if not exists
-        if enable_high_stakes:
-            if "high_stakes_verification" not in st.session_state:
-                st.session_state.high_stakes_verification = {}
-            if "high_stakes_urls" not in st.session_state:
-                st.session_state.high_stakes_urls = {}
-        
-        approved_facts = []
-        high_stakes_count = 0
-        verified_count = 0
-        unverified_count = 0
-        
-        for idx, fact in enumerate(extracted_facts):
+        # Debug: Show extracted facts count
+        if not extracted_facts or len(extracted_facts) == 0:
+            st.error("⚠️ No facts found in extracted_facts. Please go back to Stage 1 and try again.")
+            st.json({"extracted_facts_count": len(extracted_facts) if extracted_facts else 0, "extracted_facts": extracted_facts})
+            if st.button("← Back to Profile Input"):
+                st.session_state.stage = "profile_input"
+                st.rerun()
+        else:
+            st.markdown("### Review and Approve Facts")
+            st.caption(f"Only approved facts will be used for message generation. Review each fact and its source evidence. ({len(extracted_facts)} facts extracted)")
+            
+            # Fact confirmation table
+            st.markdown("#### Extracted Facts")
+            
+            # Initialize fact states if not exists
+            if "fact_states" not in st.session_state:
+                st.session_state.fact_states = {idx: True for idx in range(len(extracted_facts))}
+                st.session_state.fact_values = {idx: fact.get("value", "") for idx, fact in enumerate(extracted_facts)}
+            
+            # Initialize high-stakes verification states if not exists
+            if enable_high_stakes:
+                if "high_stakes_verification" not in st.session_state:
+                    st.session_state.high_stakes_verification = {}
+                if "high_stakes_urls" not in st.session_state:
+                    st.session_state.high_stakes_urls = {}
+            
+            approved_facts = []
+            high_stakes_count = 0
+            verified_count = 0
+            unverified_count = 0
+            
+            # Debug: Show first fact structure if empty
+            if len(extracted_facts) > 0:
+                st.caption(f"📋 Showing {len(extracted_facts)} facts. First fact structure: {list(extracted_facts[0].keys())}")
+            
+            for idx, fact in enumerate(extracted_facts):
             # Annotate fact with trust metadata if enabled
             if enable_high_stakes:
                 fact = annotate_fact_with_trust(fact, enable_high_stakes=True)
