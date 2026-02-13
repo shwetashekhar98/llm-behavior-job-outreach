@@ -216,25 +216,36 @@ def is_complete_fact(fact: str, category: str = "other", debug: bool = False) ->
     return False
 
 
-def extract_urls(text: str) -> List[Dict]:
+def extract_links_from_text(combined_text: str) -> List[Dict]:
     """
     Deterministic link extraction (does NOT depend on LLM).
     Parse combined_text with regex for URLs and create link facts.
+    
+    Returns candidate_facts dicts of the SAME SHAPE as LLM facts:
+    {
+        "fact": "...",
+        "category": "links",
+        "evidence": "<exact url>",
+        "confidence": 0.95
+    }
     """
+    # Support http(s) and bare domains
     url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
-    urls = re.findall(url_pattern, text)
+    urls = re.findall(url_pattern, combined_text)
     
     link_facts = []
-    seen_urls = set()  # Deduplicate by URL
+    seen_urls = set()  # Deduplicate by normalized URL (strip trailing slash)
     
     for url in urls:
-        url_lower = url.lower()
+        # Normalize URL (strip trailing slash for deduplication)
+        url_normalized = url.rstrip('/').lower()
         
         # Skip if already seen
-        if url_lower in seen_urls:
+        if url_normalized in seen_urls:
             continue
-        seen_urls.add(url_lower)
+        seen_urls.add(url_normalized)
         
+        url_lower = url.lower()
         category = "links"
         fact_text = None
         
@@ -243,41 +254,34 @@ def extract_urls(text: str) -> List[Dict]:
             fact_text = f"GitHub profile: {url}"
         
         # LinkedIn detection (must be /in/ profile)
-        elif 'linkedin.com/in' in url_lower or 'linkedin.com/in/' in url_lower:
+        elif 'linkedin.com/in' in url_lower:
             fact_text = f"LinkedIn profile: {url}"
         
-        # Portfolio detection: netlify.app, github.io, or if it's the only remaining URL
+        # Portfolio detection: netlify.app, github.io, or personal domain
         elif 'netlify.app' in url_lower or 'github.io' in url_lower:
             fact_text = f"Profile link: {url}"
         
-        # If no specific match, check if it's the only URL (treat as portfolio)
-        # Note: We'll handle this after collecting all URLs
+        # If no specific match, treat as portfolio (personal domain)
+        else:
+            # Check if it's not GitHub or LinkedIn (already handled above)
+            if 'github.com' not in url_lower and 'linkedin.com' not in url_lower:
+                fact_text = f"Profile link: {url}"
         
         if fact_text:
             link_facts.append({
                 "fact": fact_text,
                 "category": category,
-                "evidence": url,
-                "confidence": 0.95  # URLs are explicit
+                "evidence": url,  # Exact URL string from combined_text
+                "confidence": 0.95
             })
     
-    # Handle remaining URLs (if any) as portfolio if they're the only ones left
-    # This is a fallback for portfolio URLs that don't match specific patterns
-    for url in urls:
-        url_lower = url.lower()
-        if url_lower not in seen_urls:
-            # Check if it's not GitHub or LinkedIn (already handled)
-            if 'github.com' not in url_lower and 'linkedin.com' not in url_lower:
-                fact_text = f"Profile link: {url}"
-                link_facts.append({
-                    "fact": fact_text,
-                    "category": category,
-                    "evidence": url,
-                    "confidence": 0.95
-                })
-                seen_urls.add(url_lower)
-    
     return link_facts
+
+
+# Keep old function name for backward compatibility
+def extract_urls(text: str) -> List[Dict]:
+    """Alias for extract_links_from_text (backward compatibility)."""
+    return extract_links_from_text(text)
 
 
 def extract_candidate_facts(
