@@ -442,12 +442,12 @@ if st.session_state.stage == "profile_input":
                                                     reason_counts[reason] = reason_counts.get(reason, 0) + 1
                                             else:
                                                 st.warning(f"⚠️ Item missing rejection_reasons: {item}")
-                                if reason_counts:
-                                    st.write("**Rejection reason summary:**")
-                                    for reason, count in sorted(reason_counts.items()):
-                                        st.write(f"- `{reason}`: {count}")
-                            else:
-                                st.info("No facts were rejected.")
+                                        if reason_counts:
+                                            st.write("**Rejection reason summary:**")
+                                            for reason, count in sorted(reason_counts.items()):
+                                                st.write(f"- `{reason}`: {count}")
+                                    else:
+                                        st.info("No facts were rejected.")
                             
                             st.markdown("---")
                             
