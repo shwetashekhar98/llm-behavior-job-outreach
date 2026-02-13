@@ -291,6 +291,12 @@ if st.session_state.stage == "profile_input":
                         else:
                             extracted_facts = result
                         
+                        # Debug: Log what we're storing
+                        if show_debug_stage1:
+                            st.write(f"🔍 **Debug: Storing {len(extracted_facts) if extracted_facts else 0} facts to session state**")
+                            if extracted_facts:
+                                st.write(f"First fact: {extracted_facts[0].get('value', 'N/A')[:50]}...")
+                        
                         # Store extracted facts
                         st.session_state.extracted_facts = extracted_facts
                         st.session_state.source_text = profile_text
