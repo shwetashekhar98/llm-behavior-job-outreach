@@ -325,6 +325,21 @@ if st.session_state.stage == "profile_input":
                                     st.text(f"{idx+1}. Fact: {fact.get('fact', '')[:60]}...")
                                     st.text(f"   Evidence: {fact.get('evidence', '')[:60]}...")
                             
+                            # Link extraction stats
+                            num_llm = debug_info.get("num_llm_candidate_facts", 0)
+                            num_deterministic = debug_info.get("num_deterministic_link_facts", 0)
+                            num_merged = debug_info.get("num_merged_candidate_facts", 0)
+                            merged_links = debug_info.get("merged_link_facts", [])
+                            
+                            st.write("**Link Extraction Stats:**")
+                            st.write(f"- LLM candidate facts: {num_llm}")
+                            st.write(f"- Deterministic link facts: {num_deterministic}")
+                            st.write(f"- Merged candidate facts: {num_merged}")
+                            if merged_links:
+                                st.write("**Merged Link Facts (added deterministically):**")
+                                for link_fact in merged_links:
+                                    st.text(f"  - {link_fact.get('fact', '')}")
+                            
                             # Processed candidate facts (for comparison)
                             st.subheader("Stage 1 Processed Candidate Facts (after validation)")
                             processed_facts = debug_info.get("processed_candidate_facts", [])

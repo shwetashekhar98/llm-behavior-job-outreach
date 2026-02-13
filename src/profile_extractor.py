@@ -112,6 +112,29 @@ def is_complete_fact(fact: str, category: str = "other", debug: bool = False) ->
                 print(f"[is_complete_fact DEBUG] ACCEPT: category='links' and contains link keyword")
             return True
     
+    # AWARDS CATEGORY: Special handling for award facts
+    if category.lower() == "awards" or any(keyword in fact_lower for keyword in ["award", "prize", "honor", "honour", "medal", "recognition"]):
+        # Award-specific verbs
+        award_verbs = ["won", "receive", "received", "awarded", "earned", "granted", "bestowed"]
+        # Award-specific nouns
+        award_nouns = ["award", "prize", "honor", "honour", "medal", "recognition", "distinction"]
+        
+        has_award_verb = any(verb in fact_lower for verb in award_verbs)
+        has_award_noun = any(noun in fact_lower for noun in award_nouns)
+        
+        # If it's an award fact with proper verb and noun, use relaxed validation
+        if has_award_verb and has_award_noun:
+            # Must have at least 6 words
+            if word_count >= 6:
+                # Check it's not a fragment/ellipsis/keywords-only
+                if '...' not in fact and not re.search(r'\.{2,}', fact):
+                    short_words = [w for w in words if len(w) <= 2]
+                    short_word_ratio = len(short_words) / word_count if word_count > 0 else 0
+                    if short_word_ratio <= 0.5:
+                        if debug:
+                            print(f"[is_complete_fact DEBUG] ACCEPT: award fact with verb+noun | word_count={word_count}, has_award_verb={has_award_verb}, has_award_noun={has_award_noun}")
+                        return True
+    
     # Check for verb-like tokens (action words common in resumes) - do this early
     verbs = [
         'worked', 'led', 'built', 'developed', 'created', 'designed', 
@@ -123,7 +146,8 @@ def is_complete_fact(fact: str, category: str = "other", debug: bool = False) ->
         'engineered', 'researched', 'published', 'presented', 'taught',
         'mentored', 'supervised', 'coordinated', 'executed', 'deployed',
         'integrated', 'automated', 'analyzed', 'evaluated', 'tested',
-        'debugged', 'refactored', 'migrated', 'upgraded', 'monitored'
+        'debugged', 'refactored', 'migrated', 'upgraded', 'monitored',
+        'won', 'received', 'awarded'  # Add award verbs to general list too
     ]
     
     has_verb = any(verb in fact_lower for verb in verbs)
@@ -320,26 +344,12 @@ def extract_candidate_facts(
             "warnings": ["No meaningful profile content found"]
         }
     
-    # Extract URLs first (deterministic, always high confidence)
+    # Extract deterministic link facts (does NOT depend on LLM)
     # This happens BEFORE LLM extraction to ensure links are always captured
-    url_facts = extract_urls(combined_text)
+    deterministic_link_facts = extract_links_from_text(combined_text)
     
-    # Deduplicate: Check existing candidate_facts for URLs
-    existing_urls = set()
-    for fact in candidate_facts:
-        # Extract URL from fact text or evidence
-        fact_text = fact.get("fact", "")
-        evidence = fact.get("evidence", "")
-        # Look for URLs in fact text or evidence
-        url_matches = re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+', fact_text + " " + evidence)
-        existing_urls.update(url.lower() for url in url_matches)
-    
-    # Only add URL facts that aren't already present
-    for url_fact in url_facts:
-        url_in_fact = url_fact.get("evidence", "")
-        if url_in_fact.lower() not in existing_urls:
-            candidate_facts.append(url_fact)
-            existing_urls.add(url_in_fact.lower())
+    # Debug counter
+    num_deterministic_link_facts = len(deterministic_link_facts)
     
     # Use LLM for fact extraction
     client = Groq(api_key=api_key)
@@ -410,8 +420,48 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
         raw_warnings = result_json.get("warnings", [])
         warnings.extend(raw_warnings)
         
+        # Debug counter
+        num_llm_candidate_facts = len(raw_candidate_facts)
+        
         # CRITICAL: Create deep copy of raw facts to preserve original fact-evidence pairs
         raw_candidate_facts_deep = copy.deepcopy(raw_candidate_facts)
+        
+        # MERGE: Combine LLM facts with deterministic link facts
+        # Deduplicate by URL (normalize URLs by stripping trailing slash)
+        llm_urls = set()
+        for fact in raw_candidate_facts_deep:
+            # Extract URLs from LLM facts
+            fact_text = fact.get("fact", "")
+            evidence = fact.get("evidence", "")
+            url_matches = re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+', fact_text + " " + evidence)
+            for url in url_matches:
+                llm_urls.add(url.rstrip('/').lower())
+        
+        # Add deterministic link facts that aren't already in LLM facts
+        merged_link_facts = []
+        for link_fact in deterministic_link_facts:
+            link_url = link_fact.get("evidence", "")
+            link_url_normalized = link_url.rstrip('/').lower()
+            if link_url_normalized not in llm_urls:
+                merged_link_facts.append(link_fact)
+        
+        # Merge: LLM facts + deterministic link facts (deduplicated)
+        merged_candidate_facts = raw_candidate_facts_deep + merged_link_facts
+        num_merged_candidate_facts = len(merged_candidate_facts)
+        
+        # Debug output
+        if show_debug or DEBUG_STAGE1:
+            print(f"[DEBUG_STAGE1] Link extraction stats:")
+            print(f"  - LLM candidate facts: {num_llm_candidate_facts}")
+            print(f"  - Deterministic link facts: {num_deterministic_link_facts}")
+            print(f"  - Merged candidate facts: {num_merged_candidate_facts}")
+            if merged_link_facts:
+                print(f"  - Merged link facts:")
+                for link_fact in merged_link_facts:
+                    print(f"    * {link_fact.get('fact', '')}")
+        
+        # Use merged facts for validation
+        raw_candidate_facts_deep = merged_candidate_facts
         
         # ============================================================================
         # DEBUG: Store raw LLM output for UI display (don't display here - UI will handle it)
@@ -428,7 +478,11 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
             "raw_candidate_facts": copy.deepcopy(raw_candidate_facts_deep) if show_debug else [],
             "rejected_facts": [],
             "accepted_facts": [],
-            "processed_candidate_facts": []  # For comparison
+            "processed_candidate_facts": [],  # For comparison
+            "num_llm_candidate_facts": num_llm_candidate_facts if 'num_llm_candidate_facts' in locals() else 0,
+            "num_deterministic_link_facts": num_deterministic_link_facts if 'num_deterministic_link_facts' in locals() else 0,
+            "num_merged_candidate_facts": num_merged_candidate_facts if 'num_merged_candidate_facts' in locals() else 0,
+            "merged_link_facts": merged_link_facts if 'merged_link_facts' in locals() else []
         }
         
         if DEBUG_STAGE1:
@@ -633,41 +687,11 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
             print(f"[DEBUG_STAGE1] Total accepted facts: {len(validated_facts)}")
             print(f"[DEBUG_STAGE1] Summary: {len(raw_candidate_facts)} raw → {len(validated_facts)} accepted → {len(rejected_facts)} rejected")
         
-        # Merge validated facts with URL facts (avoid duplicates)
-        # CRITICAL: Use deep copy to prevent mutations
-        # URL facts were already added before LLM extraction, so we need to deduplicate
-        url_fact_urls = set()
-        for url_fact in url_facts:
-            url = url_fact.get("evidence", "")
-            if url:
-                url_fact_urls.add(url.lower())
-        
-        # Add validated facts that don't duplicate URL facts
+        # Add validated facts to candidate_facts
+        # Note: Deterministic link facts were already merged with LLM facts before validation
+        # So validated_facts may include link facts that passed validation
         for fact in validated_facts:
-            fact_text = fact.get("fact", "")
-            evidence = fact.get("evidence", "")
-            
-            # Check if this fact contains a URL that's already in url_facts
-            fact_urls = re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+', fact_text + " " + evidence)
-            fact_urls_lower = {url.lower() for url in fact_urls}
-            
-            # If fact contains a URL that's already in url_facts, skip it
-            if fact_urls_lower and fact_urls_lower.intersection(url_fact_urls):
-                continue
-            
-            # Also check by fact text (in case LLM extracted same link differently)
-            fact_lower = fact_text.lower()
-            is_duplicate_url_fact = False
-            for url_fact in url_facts:
-                url_fact_text = url_fact.get("fact", "").lower()
-                url_fact_url = url_fact.get("evidence", "").lower()
-                # If fact text or evidence matches URL fact, skip
-                if url_fact_url in fact_lower or url_fact_text in fact_lower:
-                    is_duplicate_url_fact = True
-                    break
-            
-            if not is_duplicate_url_fact:
-                candidate_facts.append(copy.deepcopy(fact))
+            candidate_facts.append(copy.deepcopy(fact))
         
         # INTEGRITY CHECK: Verify fact-evidence alignment in final candidate_facts
         if show_debug or DEBUG_STAGE1:
