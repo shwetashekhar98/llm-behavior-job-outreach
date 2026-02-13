@@ -193,30 +193,65 @@ def is_complete_fact(fact: str, category: str = "other", debug: bool = False) ->
 
 
 def extract_urls(text: str) -> List[Dict]:
-    """Extract URLs from text and return as link facts."""
+    """
+    Deterministic link extraction (does NOT depend on LLM).
+    Parse combined_text with regex for URLs and create link facts.
+    """
     url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
     urls = re.findall(url_pattern, text)
     
     link_facts = []
+    seen_urls = set()  # Deduplicate by URL
+    
     for url in urls:
         url_lower = url.lower()
-        category = "links"
         
-        if 'github' in url_lower:
+        # Skip if already seen
+        if url_lower in seen_urls:
+            continue
+        seen_urls.add(url_lower)
+        
+        category = "links"
+        fact_text = None
+        
+        # GitHub detection
+        if 'github.com' in url_lower:
             fact_text = f"GitHub profile: {url}"
-        elif 'linkedin' in url_lower:
+        
+        # LinkedIn detection (must be /in/ profile)
+        elif 'linkedin.com/in' in url_lower or 'linkedin.com/in/' in url_lower:
             fact_text = f"LinkedIn profile: {url}"
-        elif 'portfolio' in url_lower or 'personal' in url_lower or 'website' in url_lower:
-            fact_text = f"Portfolio/website: {url}"
-        else:
+        
+        # Portfolio detection: netlify.app, github.io, or if it's the only remaining URL
+        elif 'netlify.app' in url_lower or 'github.io' in url_lower:
             fact_text = f"Profile link: {url}"
         
-        link_facts.append({
-            "fact": fact_text,
-            "category": category,
-            "evidence": url,
-            "confidence": 0.95  # URLs are explicit
-        })
+        # If no specific match, check if it's the only URL (treat as portfolio)
+        # Note: We'll handle this after collecting all URLs
+        
+        if fact_text:
+            link_facts.append({
+                "fact": fact_text,
+                "category": category,
+                "evidence": url,
+                "confidence": 0.95  # URLs are explicit
+            })
+    
+    # Handle remaining URLs (if any) as portfolio if they're the only ones left
+    # This is a fallback for portfolio URLs that don't match specific patterns
+    for url in urls:
+        url_lower = url.lower()
+        if url_lower not in seen_urls:
+            # Check if it's not GitHub or LinkedIn (already handled)
+            if 'github.com' not in url_lower and 'linkedin.com' not in url_lower:
+                fact_text = f"Profile link: {url}"
+                link_facts.append({
+                    "fact": fact_text,
+                    "category": category,
+                    "evidence": url,
+                    "confidence": 0.95
+                })
+                seen_urls.add(url_lower)
     
     return link_facts
 
@@ -285,9 +320,26 @@ def extract_candidate_facts(
             "warnings": ["No meaningful profile content found"]
         }
     
-    # Extract URLs first (always high confidence)
+    # Extract URLs first (deterministic, always high confidence)
+    # This happens BEFORE LLM extraction to ensure links are always captured
     url_facts = extract_urls(combined_text)
-    candidate_facts.extend(url_facts)
+    
+    # Deduplicate: Check existing candidate_facts for URLs
+    existing_urls = set()
+    for fact in candidate_facts:
+        # Extract URL from fact text or evidence
+        fact_text = fact.get("fact", "")
+        evidence = fact.get("evidence", "")
+        # Look for URLs in fact text or evidence
+        url_matches = re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+', fact_text + " " + evidence)
+        existing_urls.update(url.lower() for url in url_matches)
+    
+    # Only add URL facts that aren't already present
+    for url_fact in url_facts:
+        url_in_fact = url_fact.get("evidence", "")
+        if url_in_fact.lower() not in existing_urls:
+            candidate_facts.append(url_fact)
+            existing_urls.add(url_in_fact.lower())
     
     # Use LLM for fact extraction
     client = Groq(api_key=api_key)
@@ -454,11 +506,6 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
                         f"Fact {idx+1}: Possible evidence mismatch - fact is '{category}' but evidence mentions research. "
                         f"Fact: '{fact_text[:50]}...' Evidence: '{evidence[:50]}...'"
                     )
-            fact_text = (fact_data.get("fact") or "").strip()
-            evidence = (fact_data.get("evidence") or fact_text).strip()
-            confidence = fact_data.get("confidence", 0.5)
-            category = fact_data.get("category", "other")
-            
             reasons = []  # Collect rejection reasons
             
             # Check confidence
@@ -579,11 +626,40 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
             print(f"[DEBUG_STAGE1] Total accepted facts: {len(validated_facts)}")
             print(f"[DEBUG_STAGE1] Summary: {len(raw_candidate_facts)} raw → {len(validated_facts)} accepted → {len(rejected_facts)} rejected")
         
-        # Merge with URL facts (avoid duplicates)
+        # Merge validated facts with URL facts (avoid duplicates)
         # CRITICAL: Use deep copy to prevent mutations
-        url_fact_texts = {f["fact"].lower() for f in url_facts}
+        # URL facts were already added before LLM extraction, so we need to deduplicate
+        url_fact_urls = set()
+        for url_fact in url_facts:
+            url = url_fact.get("evidence", "")
+            if url:
+                url_fact_urls.add(url.lower())
+        
+        # Add validated facts that don't duplicate URL facts
         for fact in validated_facts:
-            if fact["fact"].lower() not in url_fact_texts:
+            fact_text = fact.get("fact", "")
+            evidence = fact.get("evidence", "")
+            
+            # Check if this fact contains a URL that's already in url_facts
+            fact_urls = re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+', fact_text + " " + evidence)
+            fact_urls_lower = {url.lower() for url in fact_urls}
+            
+            # If fact contains a URL that's already in url_facts, skip it
+            if fact_urls_lower and fact_urls_lower.intersection(url_fact_urls):
+                continue
+            
+            # Also check by fact text (in case LLM extracted same link differently)
+            fact_lower = fact_text.lower()
+            is_duplicate_url_fact = False
+            for url_fact in url_facts:
+                url_fact_text = url_fact.get("fact", "").lower()
+                url_fact_url = url_fact.get("evidence", "").lower()
+                # If fact text or evidence matches URL fact, skip
+                if url_fact_url in fact_lower or url_fact_text in fact_lower:
+                    is_duplicate_url_fact = True
+                    break
+            
+            if not is_duplicate_url_fact:
                 candidate_facts.append(copy.deepcopy(fact))
         
         # INTEGRITY CHECK: Verify fact-evidence alignment in final candidate_facts
