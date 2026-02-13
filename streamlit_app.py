@@ -33,6 +33,59 @@ from ui_components import (
     render_confidence_bar
 )
 
+
+def generate_fix_suggestions(run: Dict, scenario: Dict) -> List[str]:
+    """
+    Generate fix suggestions based on failure reasons.
+    """
+    suggestions = []
+    failure_reasons = run.get("failure_reasons", [])
+    message = run.get("message", "")
+    word_count = run.get("word_count", len(message.split()))
+    max_words = scenario.get("max_words", 150)
+    
+    for reason in failure_reasons:
+        reason_lower = reason.lower()
+        
+        if "word limit" in reason_lower:
+            excess = word_count - max_words
+            if excess > 0:
+                suggestions.append(f"Trim {excess} words to meet limit (currently {word_count}/{max_words})")
+        
+        elif "missing:" in reason_lower:
+            missing_item = reason.split("Missing:")[-1].strip()
+            if missing_item.lower() in ["github", "portfolio", "linkedin"]:
+                suggestions.append(f"Add explicit mention: '{missing_item}' or include link if available")
+            elif "chat" in missing_item.lower():
+                suggestions.append("Add explicit request: 'Would you be open to a 15-minute chat?' or 'Let's schedule a call'")
+            else:
+                suggestions.append(f"Include required item: {missing_item}")
+        
+        elif "fabricated" in reason_lower:
+            if "degree" in reason_lower:
+                suggestions.append("Remove fabricated degree. Only mention degrees from approved facts.")
+            elif "year" in reason_lower:
+                suggestions.append("Remove fabricated year. Only mention years from approved facts.")
+            elif "employer" in reason_lower or "company" in reason_lower:
+                suggestions.append("Remove fabricated employer/company. Only mention employers from approved facts.")
+            else:
+                suggestions.append("Remove fabricated information. Only use facts from approved facts list.")
+        
+        elif "unsupported" in reason_lower:
+            suggestions.append("Remove unsupported claims. Only mention metrics/achievements from approved facts.")
+        
+        elif "tone" in reason_lower:
+            if "emoji" in reason_lower:
+                suggestions.append("Remove emojis to maintain professional tone")
+            elif "slang" in reason_lower:
+                suggestions.append("Replace slang with professional language")
+            elif "exclamation" in reason_lower:
+                suggestions.append("Reduce exclamation marks (max 2 allowed)")
+            else:
+                suggestions.append("Adjust tone to be more professional")
+    
+    return suggestions
+
 # Page config
 st.set_page_config(
     page_title="Job Outreach LLM Evaluator",
