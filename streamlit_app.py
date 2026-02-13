@@ -266,16 +266,34 @@ if st.session_state.stage == "profile_input":
             help="The system will extract only facts that can be directly quoted from this text."
         )
         
+        # Optional: Direct link inputs (will be extracted from text if not provided)
+        with st.expander("🔗 Optional: Add Links Directly (if not in text)", expanded=False):
+            col1, col2 = st.columns(2)
+            with col1:
+                github_url = st.text_input("GitHub URL", placeholder="https://github.com/username", key="github_input")
+                portfolio_url = st.text_input("Portfolio URL", placeholder="https://portfolio.example.com", key="portfolio_input")
+            with col2:
+                linkedin_url = st.text_input("LinkedIn URL", placeholder="https://linkedin.com/in/username", key="linkedin_input")
+        
         if st.button("🔍 Extract Facts", type="primary", use_container_width=True):
             if profile_text and profile_text.strip():
                 with st.spinner("Extracting facts with evidence..."):
                     try:
                         client = Groq(api_key=api_key)
                         # Convert to profile_input format
+                        # Include links from direct input if provided
+                        links_dict = {}
+                        if github_url and github_url.strip():
+                            links_dict["github"] = github_url.strip()
+                        if portfolio_url and portfolio_url.strip():
+                            links_dict["portfolio"] = portfolio_url.strip()
+                        if linkedin_url and linkedin_url.strip():
+                            links_dict["linkedin"] = linkedin_url.strip()
+                        
                         profile_input = {
                             "unstructured_text": profile_text,
                             "structured_fields": {},
-                            "links": {}
+                            "links": links_dict
                         }
                         result = extract_facts_with_evidence(
                             profile_input,
