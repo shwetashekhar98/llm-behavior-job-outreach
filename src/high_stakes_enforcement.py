@@ -4,6 +4,11 @@ Preprocesses approved facts to enforce cautious language for unverified high-sta
 """
 
 from typing import List, Dict, Optional
+import sys
+from pathlib import Path
+
+# Import from same package
+sys.path.insert(0, str(Path(__file__).parent))
 from high_stakes import is_high_stakes
 
 

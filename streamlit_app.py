@@ -1140,6 +1140,10 @@ elif st.session_state.stage == "results":
                     with col5:
                         render_check_indicator(not checks.get("unsupported_claims_detected", False), "No Unsupported")
                     
+                    # Show high-stakes enforcement violation if present
+                    if checks.get("high_stakes_enforcement_violation", False):
+                        st.error("⚠️ **High-Stakes Enforcement Violation**: Generated message contains definitive statements for unverified high-stakes claims.")
+                    
                     if run.get("failure_reasons"):
                         st.warning(f"**Why it failed:** {'; '.join(run.get('failure_reasons', []))}")
                         
