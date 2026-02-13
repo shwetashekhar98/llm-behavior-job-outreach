@@ -5,6 +5,7 @@ Extracts candidate facts with evidence quotes for human approval.
 
 import re
 import json
+import copy
 from typing import List, Dict, Set, Optional
 from groq import Groq
 from datetime import datetime
@@ -352,10 +353,13 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
         result_text = response.choices[0].message.content or "{}"
         result_json = json.loads(result_text)
         
-        # Extract raw LLM response
+        # Extract raw LLM response - CREATE DEEP COPY IMMEDIATELY
         raw_candidate_facts = result_json.get("candidate_facts", [])
         raw_warnings = result_json.get("warnings", [])
         warnings.extend(raw_warnings)
+        
+        # CRITICAL: Create deep copy of raw facts to preserve original fact-evidence pairs
+        raw_candidate_facts_deep = copy.deepcopy(raw_candidate_facts)
         
         # ============================================================================
         # DEBUG: Store raw LLM output for UI display (don't display here - UI will handle it)
@@ -367,11 +371,12 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
         # ============================================================================
         DEBUG_STAGE1 = os.getenv("DEBUG_STAGE1", "False").lower() == "true"
         
-        # Store debug info for UI display
+        # Store debug info for UI display - use deep copy
         debug_info = {
-            "raw_candidate_facts": raw_candidate_facts.copy() if show_debug else [],
+            "raw_candidate_facts": copy.deepcopy(raw_candidate_facts_deep) if show_debug else [],
             "rejected_facts": [],
-            "accepted_facts": []
+            "accepted_facts": [],
+            "processed_candidate_facts": []  # For comparison
         }
         
         if DEBUG_STAGE1:
@@ -406,7 +411,49 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
         accepted = []
         rejected = []
         
-        for fact_data in raw_candidate_facts:
+        # INTEGRITY CHECK: Track original fact-evidence pairs
+        integrity_warnings = []
+        
+        for idx, fact_data in enumerate(raw_candidate_facts_deep):
+            # CRITICAL: Create deep copy of fact_data to prevent mutations
+            fact_data = copy.deepcopy(fact_data)
+            
+            # Extract fields - preserve original evidence
+            fact_text = (fact_data.get("fact") or "").strip()
+            original_evidence = fact_data.get("evidence", "").strip()
+            # Only use fact_text as evidence fallback if evidence is completely missing
+            evidence = original_evidence if original_evidence else fact_text
+            confidence = fact_data.get("confidence", 0.5)
+            category = fact_data.get("category", "other")
+            
+            # INTEGRITY CHECK 1: Evidence must exist
+            if not evidence or len(evidence) == 0:
+                integrity_warnings.append(f"Fact {idx+1}: Empty evidence for fact '{fact_text[:50]}...'")
+            
+            # INTEGRITY CHECK 2: Evidence should be in source text (unless it's a fallback)
+            if evidence and evidence != fact_text:
+                if evidence.lower() not in combined_text.lower():
+                    integrity_warnings.append(
+                        f"Fact {idx+1}: Evidence not found in source text. "
+                        f"Fact: '{fact_text[:50]}...' Evidence: '{evidence[:50]}...'"
+                    )
+            
+            # INTEGRITY CHECK 3: Evidence should match fact category context
+            # (Basic heuristic: if fact mentions "research" but evidence mentions "implementation", flag it)
+            fact_lower = fact_text.lower()
+            evidence_lower = evidence.lower()
+            category_keywords = {
+                "research": ["research", "paper", "publication", "study", "analysis"],
+                "work": ["worked", "implemented", "built", "developed", "designed"],
+                "education": ["degree", "graduated", "studied", "university", "college"]
+            }
+            # This is a soft check - just log, don't reject
+            if category in ["work", "projects"] and any(kw in evidence_lower for kw in category_keywords["research"]):
+                if not any(kw in fact_lower for kw in category_keywords["research"]):
+                    integrity_warnings.append(
+                        f"Fact {idx+1}: Possible evidence mismatch - fact is '{category}' but evidence mentions research. "
+                        f"Fact: '{fact_text[:50]}...' Evidence: '{evidence[:50]}...'"
+                    )
             fact_text = (fact_data.get("fact") or "").strip()
             evidence = (fact_data.get("evidence") or fact_text).strip()
             confidence = fact_data.get("confidence", 0.5)
@@ -439,10 +486,14 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
             
             # If any reasons, reject; otherwise accept
             if reasons:
-                rejected_item = {**fact_data, "rejection_reasons": reasons}
+                # Create deep copy with rejection reasons
+                rejected_item = copy.deepcopy(fact_data)
+                rejected_item["rejection_reasons"] = reasons
+                rejected_item["_original_index"] = idx
+                rejected_item["_original_evidence"] = original_evidence
                 rejected.append(rejected_item)
                 if DEBUG_STAGE1:
-                    rejected_facts.append(rejected_item)
+                    rejected_facts.append(copy.deepcopy(rejected_item))
                 continue
             
             # Fact passed all checks
@@ -462,15 +513,19 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
             if category not in valid_categories:
                 category = "other"
             
-            # Add to accepted
+            # Add to accepted - CREATE NEW DICT (not reference to fact_data)
+            # This ensures fact-evidence pairing is preserved
             accepted_item = {
                 "fact": fact_text,
                 "category": category,
-                "evidence": evidence,
-                "confidence": confidence
+                "evidence": evidence,  # Use the validated evidence
+                "confidence": confidence,
+                "_original_index": idx,  # Track original position for debugging
+                "_original_evidence": original_evidence  # Preserve original evidence for comparison
             }
-            accepted.append(accepted_item)
-            validated_facts.append(accepted_item)
+            # Use deep copy to prevent any mutations
+            accepted.append(copy.deepcopy(accepted_item))
+            validated_facts.append(copy.deepcopy(accepted_item))
             
             # DEBUG: Store accepted fact for file logging
             if DEBUG_STAGE1:
@@ -525,10 +580,29 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
             print(f"[DEBUG_STAGE1] Summary: {len(raw_candidate_facts)} raw → {len(validated_facts)} accepted → {len(rejected_facts)} rejected")
         
         # Merge with URL facts (avoid duplicates)
+        # CRITICAL: Use deep copy to prevent mutations
         url_fact_texts = {f["fact"].lower() for f in url_facts}
         for fact in validated_facts:
             if fact["fact"].lower() not in url_fact_texts:
-                candidate_facts.append(fact)
+                candidate_facts.append(copy.deepcopy(fact))
+        
+        # INTEGRITY CHECK: Verify fact-evidence alignment in final candidate_facts
+        if show_debug or DEBUG_STAGE1:
+            for idx, fact in enumerate(candidate_facts):
+                fact_text = fact.get("fact", "")
+                evidence = fact.get("evidence", "")
+                original_evidence = fact.get("_original_evidence", "")
+                
+                # Check if evidence was modified
+                if original_evidence and evidence != original_evidence and evidence != fact_text:
+                    integrity_warnings.append(
+                        f"Final fact {idx+1}: Evidence was modified. "
+                        f"Original: '{original_evidence[:50]}...' Current: '{evidence[:50]}...'"
+                    )
+        
+        # Store processed facts for comparison
+        if show_debug:
+            debug_info["processed_candidate_facts"] = copy.deepcopy(candidate_facts)
         
         if len(candidate_facts) == 0:
             warnings.append("No valid facts extracted. Input may be too fragmented or incomplete.")
@@ -543,10 +617,13 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
         # Add debug info if requested (for UI display)
         if show_debug:
             result["debug_info"] = {
-                "raw_candidate_facts": raw_candidate_facts,
+                "raw_candidate_facts": copy.deepcopy(raw_candidate_facts_deep),
                 "raw_warnings": raw_warnings,
-                "accepted_facts": accepted,
-                "rejected_facts": rejected
+                "accepted_facts": copy.deepcopy(accepted),
+                "rejected_facts": copy.deepcopy(rejected),
+                "processed_candidate_facts": copy.deepcopy(candidate_facts),
+                "integrity_warnings": integrity_warnings,
+                "combined_text_length": len(combined_text)
             }
         
         return result
@@ -668,17 +745,35 @@ def extract_facts_with_evidence(
     """
     stage1_result = extract_candidate_facts(profile_input, api_key, model, show_debug)
     
-    # Convert to UI format
+    # Convert to UI format - PRESERVE FACT-EVIDENCE PAIRING
     facts_for_ui = []
     for idx, fact_data in enumerate(stage1_result["candidate_facts"]):
+        # CRITICAL: Use fact_data directly - don't extract separately
+        fact_text = fact_data.get("fact", "")
+        evidence = fact_data.get("evidence", "")
+        
+        # INTEGRITY CHECK: Verify fact-evidence pairing
+        if show_debug:
+            original_index = fact_data.get("_original_index", idx)
+            original_evidence = fact_data.get("_original_evidence", evidence)
+            if original_evidence and evidence != original_evidence and evidence != fact_text:
+                # This should not happen if our code is correct
+                import streamlit as st
+                st.warning(
+                    f"⚠️ Evidence mismatch detected for fact {idx+1} (original index {original_index}): "
+                    f"Fact: '{fact_text[:50]}...' Evidence: '{evidence[:50]}...' "
+                    f"Original evidence: '{original_evidence[:50]}...'"
+                )
+        
         facts_for_ui.append({
-            "value": fact_data["fact"],
-            "source_quote": fact_data["evidence"],
+            "value": fact_text,
+            "source_quote": evidence,  # Use the evidence from fact_data
             "start_index": 0,
-            "end_index": len(fact_data["evidence"]),
-            "confidence": fact_data["confidence"],
-            "category": fact_data["category"].title(),
-            "evidence_source": "extracted"
+            "end_index": len(evidence),
+            "confidence": fact_data.get("confidence", 0.5),
+            "category": fact_data.get("category", "other").title(),
+            "evidence_source": "extracted",
+            "_original_index": fact_data.get("_original_index", idx)  # Preserve for debugging
         })
     
     # Return debug info if requested (for UI display)

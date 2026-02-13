@@ -272,8 +272,16 @@ if st.session_state.stage == "profile_input":
                             st.markdown("---")
                             st.subheader("🔍 Stage 1 Debug Information")
                             
+                            # Integrity warnings
+                            integrity_warnings = debug_info.get("integrity_warnings", [])
+                            if integrity_warnings:
+                                st.error("⚠️ **Evidence Integrity Warnings:**")
+                                for warning in integrity_warnings:
+                                    st.text(warning)
+                                st.markdown("---")
+                            
                             # Raw LLM output
-                            st.subheader("Stage 1 Raw LLM Output")
+                            st.subheader("Stage 1 Raw LLM Output (from LLM)")
                             raw_facts = debug_info.get("raw_candidate_facts", [])
                             raw_warnings = debug_info.get("raw_warnings", [])
                             st.json({
@@ -281,6 +289,28 @@ if st.session_state.stage == "profile_input":
                                 "warnings": raw_warnings,
                                 "total_raw": len(raw_facts)
                             })
+                            
+                            # Show fact-evidence pairs from raw output
+                            if raw_facts:
+                                st.write("**Raw Fact-Evidence Pairs:**")
+                                for idx, fact in enumerate(raw_facts):
+                                    st.text(f"{idx+1}. Fact: {fact.get('fact', '')[:60]}...")
+                                    st.text(f"   Evidence: {fact.get('evidence', '')[:60]}...")
+                            
+                            # Processed candidate facts (for comparison)
+                            st.subheader("Stage 1 Processed Candidate Facts (after validation)")
+                            processed_facts = debug_info.get("processed_candidate_facts", [])
+                            if processed_facts:
+                                st.json(processed_facts)
+                                st.caption(f"Total processed: {len(processed_facts)}")
+                                
+                                # Show fact-evidence pairs from processed output
+                                st.write("**Processed Fact-Evidence Pairs:**")
+                                for idx, fact in enumerate(processed_facts):
+                                    st.text(f"{idx+1}. Fact: {fact.get('fact', '')[:60]}...")
+                                    st.text(f"   Evidence: {fact.get('evidence', '')[:60]}...")
+                                    original_idx = fact.get("_original_index", "?")
+                                    st.text(f"   Original index: {original_idx}")
                             
                             # Accepted facts
                             st.subheader("Stage 1 Accepted Facts")
