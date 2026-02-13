@@ -619,6 +619,11 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
             if len(evidence) > 160:
                 evidence = evidence[:157] + "..."
             
+            # Normalize category: map "publications" to "impact"
+            category_lower = category.lower() if category else "other"
+            if category_lower == "publications":
+                category = "impact"
+            
             # Validate category
             valid_categories = ["education", "work", "impact", "skills", "projects", 
                               "awards", "links", "location", "other"]
