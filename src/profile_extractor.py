@@ -68,43 +68,127 @@ def sanitize_profile_text(text: str) -> str:
     return cleaned.strip()
 
 
-def is_complete_fact(fact: str) -> bool:
+def is_complete_fact(fact: str, category: str = "other", debug: bool = False) -> bool:
     """
-    Validate if a fact is a complete claim (subject + verb + object).
-    Reject fragments, keywords, and incomplete phrases.
+    Validate if a fact is a complete claim.
+    Accepts grammatical sentences including those starting with verbs.
+    Allows acronyms, proper nouns, numbers, and parentheses.
+    
+    Args:
+        fact: The fact text to validate
+        category: Category of the fact (e.g., "links", "education", "work")
+        debug: If True, print debug info about why fact passed/failed
+    
+    Returns:
+        True if fact is complete, False otherwise
     """
-    if not fact or len(fact.strip()) < 8:
+    debug_reasons = []
+    
+    if not fact:
+        if debug:
+            print(f"[is_complete_fact DEBUG] REJECT: fact is empty/None")
         return False
     
-    words = fact.split()
-    if len(words) < 8:  # Must be at least 8 words
+    fact = fact.strip()
+    if not fact:
+        if debug:
+            print(f"[is_complete_fact DEBUG] REJECT: fact is empty after strip")
         return False
     
     fact_lower = fact.lower()
+    words = fact.split()
+    word_count = len(words)
     
-    # Reject fragments
-    if re.match(r'^\w+\s+(that|across|and|or)\s+\w+$', fact_lower):
-        return False
+    # Links category: always accept if evidence contains URL
+    if category == "links":
+        if re.search(r'https?://', fact_lower):
+            if debug:
+                print(f"[is_complete_fact DEBUG] ACCEPT: category='links' and contains URL")
+            return True
+        # Also accept if it mentions link-related keywords
+        if any(keyword in fact_lower for keyword in ['github', 'linkedin', 'portfolio', 'website', 'profile']):
+            if debug:
+                print(f"[is_complete_fact DEBUG] ACCEPT: category='links' and contains link keyword")
+            return True
     
-    # Reject if mostly keywords (too many single-word items)
-    if len([w for w in words if len(w) <= 3]) > len(words) * 0.4:
-        return False
+    # Check for verb-like tokens (action words common in resumes) - do this early
+    verbs = [
+        'worked', 'led', 'built', 'developed', 'created', 'designed', 
+        'implemented', 'graduated', 'earned', 'completed', 'studied',
+        'attended', 'based', 'located', 'achieved', 'improved', 'reduced',
+        'increased', 'managed', 'collaborated', 'delivered', 'pursued',
+        'utilized', 'maintained', 'hosted', 'established', 'founded',
+        'co-founded', 'launched', 'optimized', 'scaled', 'architected',
+        'engineered', 'researched', 'published', 'presented', 'taught',
+        'mentored', 'supervised', 'coordinated', 'executed', 'deployed',
+        'integrated', 'automated', 'analyzed', 'evaluated', 'tested',
+        'debugged', 'refactored', 'migrated', 'upgraded', 'monitored'
+    ]
+    
+    has_verb = any(verb in fact_lower for verb in verbs)
+    matched_verbs = [verb for verb in verbs if verb in fact_lower]
+    
+    # Check for common resume patterns (even without explicit verb match)
+    has_resume_pattern = bool(
+        re.search(r'\b(at|as|in|for|with|from|to)\s+[A-Z]', fact) or  # "at Company", "as Role", "in Location"
+        re.search(r'\b\d+\s+(years?|months?|days?)\b', fact_lower) or  # "4 years"
+        re.search(r'\b(MS|M\.S\.|MBA|PhD|B\.A\.|B\.S\.|Master|Bachelor)\b', fact, re.IGNORECASE) or  # Degrees
+        re.search(r'\b(GPA|grade|score|rating)\b', fact_lower) or  # Academic metrics
+        re.search(r'https?://', fact_lower)  # URLs
+    )
+    
+    # If has verb or resume pattern, allow even if < 5 words (but still check other validations)
+    # Otherwise, must have at least 5 words
+    if not (has_verb or has_resume_pattern):
+        if word_count < 5:
+            if debug:
+                print(f"[is_complete_fact DEBUG] REJECT: only {word_count} words (need >= 5) and no verb/pattern")
+            return False
+    
+    debug_reasons.append(f"word_count={word_count} (>=5 ✓)")
     
     # Reject ellipses/garbled truncation
     if '...' in fact or re.search(r'\.{2,}', fact):
+        if debug:
+            print(f"[is_complete_fact DEBUG] REJECT: contains ellipses/truncation")
         return False
     
-    # Must have a verb (indicates a claim)
-    verbs = ['worked', 'led', 'built', 'developed', 'created', 'designed', 
-             'implemented', 'graduated', 'earned', 'completed', 'studied',
-             'attended', 'based', 'located', 'achieved', 'improved', 'reduced',
-             'increased', 'managed', 'collaborated', 'delivered']
-    if not any(verb in fact_lower for verb in verbs):
-        # Check if it's a location or link fact
-        if not (re.search(r'http', fact_lower) or re.search(r'\b(based in|located in|from)\b', fact_lower)):
-            return False
+    # Reject obvious fragments (very short with connector words)
+    if word_count < 6 and re.match(r'^\w+\s+(that|across|and|or|the|a|an)\s+\w+$', fact_lower):
+        if debug:
+            print(f"[is_complete_fact DEBUG] REJECT: looks like fragment pattern")
+        return False
     
-    return True
+    # Reject if mostly very short words (keyword salad)
+    short_words = [w for w in words if len(w) <= 2]
+    short_word_ratio = len(short_words) / word_count if word_count > 0 else 0
+    if short_word_ratio > 0.5:
+        if debug:
+            print(f"[is_complete_fact DEBUG] REJECT: {short_word_ratio:.1%} short words (keyword salad)")
+        return False
+    
+    debug_reasons.append(f"short_word_ratio={short_word_ratio:.1%} (<0.5 ✓)")
+    
+    if has_verb:
+        debug_reasons.append(f"has_verb=True (matched: {matched_verbs})")
+    else:
+        debug_reasons.append("has_verb=False")
+    
+    if has_resume_pattern:
+        debug_reasons.append("has_resume_pattern=True")
+    else:
+        debug_reasons.append("has_resume_pattern=False")
+    
+    # Accept if has verb OR has resume pattern
+    if has_verb or has_resume_pattern:
+        if debug:
+            print(f"[is_complete_fact DEBUG] ACCEPT: {'has_verb' if has_verb else 'has_resume_pattern'} | {'; '.join(debug_reasons)}")
+        return True
+    
+    # Reject if no verb and no resume pattern
+    if debug:
+        print(f"[is_complete_fact DEBUG] REJECT: no verb and no resume pattern | {'; '.join(debug_reasons)}")
+    return False
 
 
 def extract_urls(text: str) -> List[Dict]:
@@ -342,8 +426,10 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
             if evidence and evidence.lower() not in combined_text.lower():
                 reasons.append("evidence_not_substring_match")
             
-            # Validate fact completeness
-            if not is_complete_fact(fact_text):
+            # Validate fact completeness (pass category for link handling)
+            # Enable debug if show_debug is True
+            is_complete = is_complete_fact(fact_text, category=category, debug=show_debug)
+            if not is_complete:
                 reasons.append("is_complete_fact_check_failed")
             
             # Check for duplicates
