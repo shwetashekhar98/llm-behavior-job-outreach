@@ -7,6 +7,10 @@ import json
 from typing import Dict, List, Optional
 from groq import Groq
 from validation_engine import run_all_checks
+from high_stakes_enforcement import (
+    preprocess_facts_for_generation,
+    detect_high_stakes_enforcement_violation
+)
 
 
 def extract_confidence(text: str) -> float:
@@ -64,6 +68,21 @@ def generate_message_with_word_limit(
     must_include = scenario.get("must_include", [])
     notes = scenario.get("notes", "")
     
+    # PART 2: Preprocess facts based on high-stakes enforcement
+    # This is called per-run, but we'll reuse the result for evaluation
+    preprocessing_result = preprocess_facts_for_generation(
+        approved_facts_final,
+        high_stakes_metadata,
+        enforce_high_stakes_language
+    )
+    facts_for_generation = preprocessing_result["facts_for_generation"]
+    original_facts = preprocessing_result["original_facts"]
+    conversion_log = preprocessing_result["conversion_log"]
+    preprocessing_stats = preprocessing_result["stats"]
+    
+    # Store in function scope for evaluation use
+    # (Note: This will be recomputed per run, but that's OK for consistency)
+    
     system_prompt = f"""You are a reliability-focused message generation system.
 
 STAGE 3: MESSAGE GENERATION
@@ -90,16 +109,19 @@ Target: {recipient_type} at {company} for {target_role} role
 Channel: {channel}
 Tone: {tone}
 Maximum words: {max_words} (STRICT - count words and stay under)
-Approved facts ONLY: {', '.join(approved_facts_final) if approved_facts_final else 'None provided'}
+Facts for generation: {', '.join(facts_for_generation) if facts_for_generation else 'None provided'}
 
-{('HIGH-STAKES LANGUAGE ENFORCEMENT:\n' +
-  'For unverified high-stakes claims (verification_status == "unverified"), use cautious phrasing:\n' +
-  '- "I have published..." instead of "Published..."\n' +
-  '- "I was fortunate to receive..." instead of "Won..."\n' +
-  '- "My work was accepted at..." instead of "Accepted at..."\n' +
-  '- "According to my profile, ..." or "As noted in my background, ..."\n' +
-  f'High-stakes metadata: {json.dumps(high_stakes_metadata, indent=2)}\n' +
-  'Apply cautious phrasing ONLY to unverified high-stakes facts. Verified facts can use direct phrasing.') if (enforce_high_stakes_language and high_stakes_metadata) else ''}
+{('CRITICAL HIGH-STAKES ENFORCEMENT RULES (ENFORCEMENT ENABLED):\n' +
+  'The following facts have been converted to cautious phrasing because they are unverified high-stakes claims:\n' +
+  '\n'.join([f'  - Original: "{c["original"]}" -> Use: "{c["converted"]}"' for c in conversion_log[:5]]) +
+  (f'\n  ... and {len(conversion_log) - 5} more' if len(conversion_log) > 5 else '') +
+  '\n\nSTRICT RULES:\n' +
+  '1. Do NOT state any unverified high-stakes claims as definite facts.\n' +
+  '2. If mentioning them, you MUST use the cautious phrasing provided above.\n' +
+  '3. NEVER use definitive statements like "Published", "Won", "PhD from" for unverified claims.\n' +
+  '4. NEVER fabricate verification URLs.\n' +
+  '5. If you cannot phrase it cautiously, OMIT the claim entirely.\n' +
+  '\nVerified high-stakes facts (if any) can use direct phrasing.') if (enforce_high_stakes_language and conversion_log) else ''}
 
 Available links (MUST include URLs if they exist):
 - GitHub: {link_facts.get('github', 'Not available')}
@@ -139,7 +161,7 @@ Recipient: {recipient_type}
 Requirements:
 - {tone} tone, max {max_words} words (STRICT LIMIT)
 - Must include: {', '.join(must_include) if must_include else 'None'}
-- Only use these approved facts: {', '.join(approved_facts_final) if approved_facts_final else 'None provided'}
+- Only use these facts: {', '.join(facts_for_generation) if facts_for_generation else 'None provided'}
 - Prefer 1-2 strongest facts; do not dump a resume
 - Ask for a "15-minute chat/call" unless scenario says otherwise
 
@@ -256,6 +278,27 @@ def evaluate_scenario(
                 scenario.get("target_role", ""),
                 link_facts=link_facts
             )
+            
+            # PART 4: Check for high-stakes enforcement violations
+            # Use the conversion_log from preprocessing_result (computed once above)
+            if enforce_high_stakes_language and conversion_log:
+                violation_detected, violations = detect_high_stakes_enforcement_violation(
+                    gen_result["message"],
+                    original_facts,
+                    conversion_log,
+                    high_stakes_metadata
+                )
+                
+                if violation_detected:
+                    check_result["high_stakes_enforcement_violation"] = True
+                    check_result["overall_pass"] = False  # Fail if violation detected
+                    if "failure_reasons" not in check_result:
+                        check_result["failure_reasons"] = []
+                    check_result["failure_reasons"].extend([f"High-stakes enforcement violation: {v}" for v in violations])
+                else:
+                    check_result["high_stakes_enforcement_violation"] = False
+            else:
+                check_result["high_stakes_enforcement_violation"] = False
         
         results.append({
             "run": run_idx + 1,

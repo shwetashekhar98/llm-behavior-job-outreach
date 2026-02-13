@@ -31,6 +31,7 @@ def compute_failure_buckets(
         "Tone mismatch": 0,
         "Fabrication detected": 0,
         "Unsupported claims": 0,
+        "High-stakes enforcement violation": 0,
         "Confidence mismatch (overconfident)": 0,
         "Stability drift": 0
     }
@@ -62,6 +63,9 @@ def compute_failure_buckets(
             
             if checks.get("unsupported_claims_detected", False):
                 buckets["Unsupported claims"] += 1
+            
+            if checks.get("high_stakes_enforcement_violation", False):
+                buckets["High-stakes enforcement violation"] += 1
     
     # Add summary-derived buckets
     if overall_metrics and total_runs > 0:

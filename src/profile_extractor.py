@@ -766,7 +766,8 @@ Return JSON with candidate_facts array. Only include complete claims with eviden
 def prepare_approved_facts(
     approved_facts: List[str],
     rejected_facts: List[str],
-    manual_facts: Optional[List[str]] = None
+    manual_facts: Optional[List[str]] = None,
+    high_stakes_metadata: Optional[Dict] = None
 ) -> Dict:
     """
     STAGE 2: Prepare final fact set from user approvals.
@@ -804,14 +805,19 @@ def prepare_approved_facts(
     notes_for_generation = []
     
     for fact in approved_facts_final:
-        fact_lower = fact.lower()
+        # Handle both string and dict formats
+        if isinstance(fact, dict):
+            fact_text = fact.get("value", "")
+        else:
+            fact_text = fact
+        fact_lower = fact_text.lower()
         
         # Extract GitHub URL
         github_match = re.search(r'github[:\s]+(https?://[^\s]+)', fact_lower)
         if github_match:
             link_facts["github"] = github_match.group(1)
         elif 'github' in fact_lower and 'http' in fact_lower:
-            url_match = re.search(r'https?://[^\s]+', fact)
+            url_match = re.search(r'https?://[^\s]+', fact_text)
             if url_match:
                 link_facts["github"] = url_match.group(0)
         
@@ -820,7 +826,7 @@ def prepare_approved_facts(
         if linkedin_match:
             link_facts["linkedin"] = linkedin_match.group(1)
         elif 'linkedin' in fact_lower and 'http' in fact_lower:
-            url_match = re.search(r'https?://[^\s]+', fact)
+            url_match = re.search(r'https?://[^\s]+', fact_text)
             if url_match:
                 link_facts["linkedin"] = url_match.group(0)
         
@@ -829,13 +835,13 @@ def prepare_approved_facts(
         if portfolio_match:
             link_facts["portfolio"] = portfolio_match.group(1)
         elif ('portfolio' in fact_lower or 'website' in fact_lower) and 'http' in fact_lower:
-            url_match = re.search(r'https?://[^\s]+', fact)
+            url_match = re.search(r'https?://[^\s]+', fact_text)
             if url_match:
                 link_facts["portfolio"] = url_match.group(0)
         
         # Other links
         if 'http' in fact_lower and not any(link in fact_lower for link in ['github', 'linkedin', 'portfolio']):
-            url_match = re.search(r'https?://[^\s]+', fact)
+            url_match = re.search(r'https?://[^\s]+', fact_text)
             if url_match:
                 link_facts["other_links"].append(url_match.group(0))
     

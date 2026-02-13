@@ -796,10 +796,35 @@ elif st.session_state.stage == "fact_confirmation":
                                      if not st.session_state.fact_states.get(idx, False)]
                     manual_facts_list = [f for f in approved_facts_values if f not in [fact.get("value", "") for fact in extracted_facts]]
                     
+                    # PART 1: Build high-stakes metadata dict before calling prepare_approved_facts
+                    high_stakes_metadata_for_prep = {}
+                    if enable_high_stakes:
+                        for fact in approved_facts_rebuilt:
+                            if isinstance(fact, dict) and fact.get("trust_flag") == "high_stakes":
+                                fact_text = fact.get("value", "")
+                                high_stakes_metadata_for_prep[fact_text] = {
+                                    "verification_status": fact.get("verification_status", "unverified"),
+                                    "verification_url": fact.get("verification_url", "")
+                                }
+                            elif isinstance(fact, str):
+                                # Check if this fact is high-stakes from extracted_facts
+                                for idx, extracted_fact in enumerate(extracted_facts):
+                                    if extracted_fact.get("value", "") == fact:
+                                        category = extracted_fact.get("category", "other")
+                                        if is_high_stakes(fact, category):
+                                            verification_key = f"verify_status_{idx}"
+                                            url_key = f"verify_url_{idx}"
+                                            high_stakes_metadata_for_prep[fact] = {
+                                                "verification_status": st.session_state.high_stakes_verification.get(verification_key, "unverified"),
+                                                "verification_url": st.session_state.high_stakes_urls.get(url_key, "")
+                                            }
+                                        break
+                    
                     stage2_result = prepare_approved_facts(
                         approved_facts_values,
                         rejected_facts,
-                        manual_facts_list
+                        manual_facts_list,
+                        high_stakes_metadata=high_stakes_metadata_for_prep if enable_high_stakes else None
                     )
                     
                     # Debug: Verify stage2_result
@@ -813,20 +838,15 @@ elif st.session_state.stage == "fact_confirmation":
                         # Debug: Verify storage
                         st.success(f"✅ Stored {len(st.session_state.approved_facts)} approved facts. Proceeding to Stage 3...")
                         
-                        # Store high-stakes metadata if enabled
+                        # Store high-stakes metadata if enabled (for backward compatibility and debug)
                         if enable_high_stakes:
-                            high_stakes_metadata = {}
-                            for idx, fact in enumerate(extracted_facts):
-                                fact_text = fact.get("value", "")
-                                category = fact.get("category", "other")
-                                if is_high_stakes(fact_text, category):
-                                    verification_key = f"verify_status_{idx}"
-                                    url_key = f"verify_url_{idx}"
-                                    high_stakes_metadata[fact_text] = {
-                                        "verification_status": st.session_state.high_stakes_verification.get(verification_key, "unverified"),
-                                        "verification_url": st.session_state.high_stakes_urls.get(url_key, "")
-                                    }
-                            st.session_state.high_stakes_metadata = high_stakes_metadata
+                            st.session_state.high_stakes_metadata = high_stakes_metadata_for_prep
+                            
+                            # Debug logging
+                            high_stakes_count = len(high_stakes_metadata_for_prep)
+                            verified_count = sum(1 for m in high_stakes_metadata_for_prep.values() if m.get("verification_status") == "verified")
+                            unverified_count = high_stakes_count - verified_count
+                            st.info(f"🔍 High-Stakes: {high_stakes_count} total, {verified_count} verified, {unverified_count} unverified")
                         
                         st.session_state.stage = "message_generation"
                         st.rerun()
