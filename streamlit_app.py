@@ -309,6 +309,19 @@ if st.session_state.stage == "profile_input":
                         else:
                             extracted_facts = result
                         
+                        # CRITICAL: Always log what we got, even if debug is disabled
+                        # This helps diagnose issues when extraction fails
+                        if not extracted_facts or len(extracted_facts) == 0:
+                            st.warning(f"⚠️ **extract_facts_with_evidence returned empty result. Type: {type(result).__name__}**")
+                            if isinstance(result, tuple):
+                                st.write(f"Tuple length: {len(result)}")
+                                if len(result) > 0:
+                                    st.write(f"First element type: {type(result[0]).__name__}, length: {len(result[0]) if hasattr(result[0], '__len__') else 'N/A'}")
+                            elif isinstance(result, list):
+                                st.write(f"List length: {len(result)}")
+                            else:
+                                st.json({"result_type": type(result).__name__, "result": result})
+                        
                         # Debug: Log what we're storing
                         if show_debug_stage1:
                             st.write(f"🔍 **Debug: extract_facts_with_evidence returned {len(extracted_facts) if extracted_facts else 0} facts**")
