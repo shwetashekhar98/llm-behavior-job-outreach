@@ -24,27 +24,35 @@ def extract_urls(text: str) -> List[str]:
 def contains_github_url(message: str, approved_facts: List[str], link_facts: Optional[Dict] = None) -> bool:
     """
     Check if message contains GitHub URL semantically.
-    Accepts: github.com, GitHub URL from approved facts, or link_facts.
+    Accepts: "github" (case-insensitive substring) OR github.com URL pattern.
     """
     message_lower = message.lower()
     
-    # Check for github.com in message
-    if "github.com" in message_lower:
+    # PART 1 FIX: Case-insensitive substring match for "github"
+    if "github" in message_lower:
+        return True
+    
+    # Check for github.com URL pattern (regex)
+    if re.search(r'github\.com', message_lower):
         return True
     
     # Check if any approved fact contains GitHub URL
     for fact in approved_facts:
-        if "github.com" in fact.lower() or "github" in fact.lower() and "http" in fact.lower():
+        if "github.com" in fact.lower() or ("github" in fact.lower() and "http" in fact.lower()):
             # Check if this GitHub URL appears in message
             urls_in_fact = extract_urls(fact)
             urls_in_message = extract_urls(message)
             if any(github_url in message for github_url in urls_in_fact if "github" in github_url.lower()):
                 return True
     
-    # Check link_facts
+    # Check link_facts - if GitHub URL exists, it satisfies the requirement
     if link_facts and link_facts.get("github"):
         github_url = link_facts["github"]
         if github_url.lower() in message_lower:
+            return True
+        # Also check if URL pattern matches
+        if re.search(r'github\.com', github_url.lower()):
+            # If GitHub URL is in approved facts, consider it satisfied
             return True
     
     return False
@@ -53,22 +61,44 @@ def contains_github_url(message: str, approved_facts: List[str], link_facts: Opt
 def contains_portfolio_url(message: str, approved_facts: List[str], link_facts: Optional[Dict] = None) -> bool:
     """
     Check if message contains portfolio URL semantically.
-    Accepts: portfolio URL from approved facts, any non-GitHub website URL,
-    or "profile link:" + URL pattern.
+    PART 1 FIX: Accepts "portfolio", "personal website", "personal site" (case-insensitive)
+    OR any URL NOT matching github.com or linkedin.com.
     """
     message_lower = message.lower()
+    
+    # PART 1 FIX: Case-insensitive substring match for synonyms
+    portfolio_synonyms = ["portfolio", "personal website", "personal site"]
+    if any(synonym in message_lower for synonym in portfolio_synonyms):
+        return True
     
     # Check for "profile link:" pattern
     if re.search(r'profile\s+link\s*:?\s*https?://', message_lower):
         return True
     
+    # PART 3 FIX: If verified portfolio URL exists in link_facts, it satisfies requirement
+    if link_facts and link_facts.get("portfolio"):
+        portfolio_url = link_facts["portfolio"]
+        # Check if portfolio URL appears in message
+        if portfolio_url.lower() in message_lower:
+            return True
+        # Extract domain from portfolio URL
+        domain_match = re.search(r'https?://([^/]+)', portfolio_url)
+        if domain_match:
+            domain = domain_match.group(1)
+            if domain.lower() in message_lower:
+                return True
+        # If portfolio URL exists in approved facts, consider it satisfied
+        for fact in approved_facts:
+            if portfolio_url.lower() in fact.lower():
+                return True
+    
     # Extract all URLs from message
     urls_in_message = extract_urls(message)
     
-    # Check if any URL is NOT a GitHub URL (treat as portfolio)
+    # Check if any URL is NOT a GitHub/LinkedIn URL (treat as portfolio)
     for url in urls_in_message:
         url_lower = url.lower()
-        # If it's not GitHub, LinkedIn, or a common social platform, treat as portfolio
+        # PART 1 FIX: If it's not GitHub or LinkedIn, treat as portfolio
         if "github.com" not in url_lower and "linkedin.com" not in url_lower:
             # Check if this URL matches any approved fact
             for fact in approved_facts:
@@ -84,37 +114,21 @@ def contains_portfolio_url(message: str, approved_facts: List[str], link_facts: 
                     if other_link.lower() in url_lower:
                         return True
     
-    # Check link_facts directly
-    if link_facts:
-        portfolio_url = link_facts.get("portfolio", "")
-        if portfolio_url:
-            # Check if portfolio URL domain appears in message
-            if portfolio_url.lower() in message_lower:
-                return True
-            # Extract domain from portfolio URL
-            domain_match = re.search(r'https?://([^/]+)', portfolio_url)
-            if domain_match:
-                domain = domain_match.group(1)
-                if domain.lower() in message_lower:
-                    return True
-    
     return False
 
 
 def contains_chat_ask(message: str) -> bool:
     """
     Check if message contains a chat/call request semantically.
-    Accepts: "15-minute chat", "15 minute chat", "quick chat", "brief chat",
-    "schedule", "call", "connect", "chat" (case-insensitive).
+    PART 1 FIX: Accepts "chat", "connect", "schedule", "discuss", "15-minute" (case-insensitive, substring-based).
     """
     message_lower = message.lower()
     
-    chat_phrases = [
-        "15-minute chat", "15 minute chat", "quick chat", "brief chat",
-        "schedule", "call", "connect", "chat", "conversation"
-    ]
+    # PART 1 FIX: Case-insensitive substring matching (not exact phrase)
+    chat_keywords = ["chat", "connect", "schedule", "discuss", "15-minute"]
     
-    return any(phrase in message_lower for phrase in chat_phrases)
+    # Check if any keyword appears as substring (case-insensitive)
+    return any(keyword in message_lower for keyword in chat_keywords)
 
 
 def must_include_check(

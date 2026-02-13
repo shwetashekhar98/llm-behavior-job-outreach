@@ -93,13 +93,21 @@ Maximum words: {max_words} (STRICT - count words and stay under)
 Approved facts ONLY: {', '.join(approved_facts_final) if approved_facts_final else 'None provided'}
 
 {('HIGH-STAKES LANGUAGE ENFORCEMENT:\n' +
-  'For unverified high-stakes claims, use cautious phrasing like "According to my profile, ..." or "As noted in my background, ..."\n' +
-  f'High-stakes metadata: {json.dumps(high_stakes_metadata, indent=2)}') if (enforce_high_stakes_language and high_stakes_metadata) else ''}
+  'For unverified high-stakes claims (verification_status == "unverified"), use cautious phrasing:\n' +
+  '- "I have published..." instead of "Published..."\n' +
+  '- "I was fortunate to receive..." instead of "Won..."\n' +
+  '- "My work was accepted at..." instead of "Accepted at..."\n' +
+  '- "According to my profile, ..." or "As noted in my background, ..."\n' +
+  f'High-stakes metadata: {json.dumps(high_stakes_metadata, indent=2)}\n' +
+  'Apply cautious phrasing ONLY to unverified high-stakes facts. Verified facts can use direct phrasing.') if (enforce_high_stakes_language and high_stakes_metadata) else ''}
 
-Available links:
+Available links (MUST include URLs if they exist):
 - GitHub: {link_facts.get('github', 'Not available')}
 - Portfolio: {link_facts.get('portfolio', 'Not available')}
 - LinkedIn: {link_facts.get('linkedin', 'Not available')}
+
+PART 3 FIX: If a verified GitHub/Portfolio/LinkedIn URL exists above, you MUST explicitly include the URL in your message.
+This will satisfy the must_include requirement even without the literal word "Portfolio" or "GitHub".
 
 If a link is required but not available, use placeholder like "GitHub link available on request" - DO NOT fabricate URLs.
 
