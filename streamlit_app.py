@@ -723,11 +723,19 @@ elif st.session_state.stage == "fact_confirmation":
         col1, col2 = st.columns(2)
         with col1:
             if st.button("✅ Confirm Facts", type="primary", use_container_width=True):
+                # CRITICAL: Ensure fact_states is initialized (defensive check)
+                if "fact_states" not in st.session_state:
+                    st.session_state.fact_states = {}
+                if "fact_values" not in st.session_state:
+                    st.session_state.fact_values = {}
+                
                 # Rebuild approved_facts from current checkbox states (in case debug toggle caused rerun)
                 approved_facts_rebuilt = []
                 for idx, fact in enumerate(extracted_facts):
+                    # Get approval state - default to True if not set (defensive)
                     is_approved = st.session_state.fact_states.get(idx, True)
                     if is_approved:
+                        # Get fact value - use current session state or fallback to fact's value
                         fact_value = st.session_state.fact_values.get(idx, fact.get("value", ""))
                         if fact_value and fact_value.strip():
                             # Handle high-stakes facts
@@ -737,6 +745,12 @@ elif st.session_state.stage == "fact_confirmation":
                                 if is_high_stakes(fact_text, category):
                                     verification_key = f"verify_status_{idx}"
                                     url_key = f"verify_url_{idx}"
+                                    # Ensure high_stakes_verification dict exists
+                                    if "high_stakes_verification" not in st.session_state:
+                                        st.session_state.high_stakes_verification = {}
+                                    if "high_stakes_urls" not in st.session_state:
+                                        st.session_state.high_stakes_urls = {}
+                                    
                                     fact_with_metadata = {
                                         "value": fact_value,
                                         "trust_flag": "high_stakes",
