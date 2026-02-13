@@ -246,6 +246,27 @@ def evaluate_scenario(
     results = []
     strict_mode = (evaluation_mode == "STRICT")
     
+    # PART 2: Preprocess facts once for all runs (to get conversion_log for evaluation)
+    # This ensures consistent conversion across all runs
+    preprocessing_result = preprocess_facts_for_generation(
+        approved_facts_final,
+        high_stakes_metadata,
+        enforce_high_stakes_language
+    )
+    conversion_log = preprocessing_result["conversion_log"]
+    original_facts = preprocessing_result["original_facts"]
+    preprocessing_stats = preprocessing_result["stats"]
+    
+    # Debug logging
+    if enforce_high_stakes_language:
+        import sys
+        print(f"[HIGH_STAKES_ENFORCEMENT] Enabled: True", file=sys.stderr)
+        print(f"[HIGH_STAKES_ENFORCEMENT] Stats: {preprocessing_stats}", file=sys.stderr)
+        if conversion_log:
+            print(f"[HIGH_STAKES_ENFORCEMENT] Conversions: {len(conversion_log)}", file=sys.stderr)
+            for conv in conversion_log[:3]:  # Show first 3
+                print(f"  - {conv['original'][:50]}... -> {conv['converted'][:50]}...", file=sys.stderr)
+    
     for run_idx in range(runs):
         # STAGE 3: Generate message
         gen_result = generate_message_with_word_limit(
