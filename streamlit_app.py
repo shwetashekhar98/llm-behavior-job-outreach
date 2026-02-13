@@ -590,7 +590,10 @@ elif st.session_state.stage == "results":
         st.markdown("### Detailed Results by Scenario")
         
         for result in results:
-            scenario = result["scenario"]
+            scenario = result.get("scenario", {})
+            if not scenario:
+                st.error(f"Missing scenario data for result: {result.get('scenario_id', 'unknown')}")
+                continue
             with st.expander(
                 f"**{scenario['company']}** - {scenario['target_role']} ({scenario['channel']}) | "
                 f"Pass Rate: {result['pass_rate']:.1%}",
@@ -654,11 +657,13 @@ elif st.session_state.stage == "results":
                         st.warning(f"**Why it failed:** {'; '.join(run.get('failure_reasons', []))}")
                         
                         # Fix suggestions
-                        suggestions = generate_fix_suggestions(run, result["scenario"])
-                        if suggestions:
-                            with st.expander("🔧 Fix Suggestions", expanded=False):
-                                for suggestion in suggestions:
-                                    st.markdown(f"- {suggestion}")
+                        scenario = result.get("scenario", {})
+                        if scenario:
+                            suggestions = generate_fix_suggestions(run, scenario)
+                            if suggestions:
+                                with st.expander("🔧 Fix Suggestions", expanded=False):
+                                    for suggestion in suggestions:
+                                        st.markdown(f"- {suggestion}")
                     
                     st.text_area(
                         "Generated Message",
