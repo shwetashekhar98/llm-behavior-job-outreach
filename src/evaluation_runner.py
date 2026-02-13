@@ -385,10 +385,13 @@ def evaluate_scenario(
                 "must_include_ok": r["must_include_ok"],
                 "tone_ok": r["tone_ok"],
                 "fabrication_detected": r["fabrication_detected"],
-                "unsupported_claims_detected": r.get("unsupported_claims_detected", False)
+                "unsupported_claims_detected": r.get("unsupported_claims_detected", False),
+                "high_stakes_enforcement_violation": r.get("high_stakes_enforcement_violation", False)
             },
             "overall_pass": r["overall_pass"],
-            "failure_reasons": r.get("failure_reasons", [])
+            "failure_reasons": r.get("failure_reasons", []),
+            "enforcement_behavior": r.get("enforcement_behavior", {}),
+            "language_quality": r.get("language_quality", {})
         })
     
     return {
