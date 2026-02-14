@@ -1088,7 +1088,7 @@ elif st.session_state.stage == "results":
             )
             
             # Check if enforcement is enabled (from session state or results)
-            enforcement_enabled = st.session_state.get("enforce_high_stakes_language", False)
+            enforcement_enabled = st.session_state.get("_enforce_high_stakes_language_setting", False)
             
             # Compute aggregates
             aggregates = compute_enforcement_aggregates(results)
