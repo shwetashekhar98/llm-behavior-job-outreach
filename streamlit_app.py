@@ -953,8 +953,8 @@ elif st.session_state.stage == "message_generation":
                         )
                         all_results.append(result)
                     
-                    # Store enforcement setting for visualization
-                    st.session_state.enforce_high_stakes_language = enforce_high_stakes_language
+                    # Store enforcement setting for visualization (use different key to avoid conflict)
+                    st.session_state._enforce_high_stakes_language_setting = enforce_high_stakes_language
                     
                     progress_bar.progress(1.0)
                     status_text.text("✅ Evaluation Complete!")
